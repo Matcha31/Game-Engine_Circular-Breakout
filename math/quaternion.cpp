@@ -1,28 +1,16 @@
 #include "quaternion.hpp"
 #include "mat4.hpp"
 
-// ----------------------
-// Constructors
-// ----------------------
-
 Quaternion::Quaternion()
     : x(0), y(0), z(0), w(1) {}
 
 Quaternion::Quaternion(float xx, float yy, float zz, float ww)
     : x(xx), y(yy), z(zz), w(ww) {}
 
-// ----------------------
-// Conjugation
-// ----------------------
-
 Quaternion Quaternion::conjugate() const
 {
     return Quaternion(-x, -y, -z, w);
 }
-
-// ----------------------
-// Length
-// ----------------------
 
 float Quaternion::length() const
 {
@@ -33,10 +21,6 @@ float Quaternion::lengthSquared() const
 {
     return x*x + y*y + z*z + w*w;
 }
-
-// ----------------------
-// Normalise
-// ----------------------
 
 Quaternion Quaternion::normalized() const
 {
@@ -58,10 +42,6 @@ void Quaternion::normalizeInPlace()
     w *= inv;
 }
 
-// ----------------------
-// Inverse
-// ----------------------
-
 Quaternion Quaternion::inverse() const
 {
     float ls = lengthSquared();
@@ -71,18 +51,10 @@ Quaternion Quaternion::inverse() const
     return Quaternion(c.x / ls, c.y / ls, c.z / ls, c.w / ls);
 }
 
-// ----------------------
-// Dot product
-// ----------------------
-
 float Quaternion::dot(const Quaternion& a, const Quaternion& b)
 {
     return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
 }
-
-// ----------------------
-// SLERP
-// ----------------------
 
 Quaternion Quaternion::slerp(const Quaternion& a, const Quaternion& b, float t)
 {
@@ -120,10 +92,6 @@ Quaternion Quaternion::slerp(const Quaternion& a, const Quaternion& b, float t)
     );
 }
 
-// ----------------------
-// To Axis-Angle
-// ----------------------
-
 AxisAngle Quaternion::toAxisAngle() const
 {
     Quaternion q = normalized();
@@ -140,10 +108,6 @@ AxisAngle Quaternion::toAxisAngle() const
         angle
     );
 }
-
-// ----------------------
-// To rotation matrix
-// ----------------------
 
 Mat4 Quaternion::toRotationMatrix() const
 {

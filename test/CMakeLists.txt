@@ -3,6 +3,9 @@ find_package(GTest CONFIG REQUIRED)
 add_executable(PA199_project_tests
     "vec4_test.cpp"
     "mat4_test.cpp"
+    "axis_angle_test.cpp"
+    "quaternion_test.cpp"
+    "polar_test.cpp"
     "tests.cpp"
     )
 

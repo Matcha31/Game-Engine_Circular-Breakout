@@ -1,6 +1,6 @@
 #pragma once
 #include <cmath>
-#include "vec4.hpp"
+#include "mat4.hpp"
 #include "axis_angle.hpp"
 
 class Quaternion

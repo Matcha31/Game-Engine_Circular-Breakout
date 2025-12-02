@@ -3,6 +3,12 @@ add_library(math
     "vec4.cpp"
     "mat4.hpp"
     "mat4.cpp"
+    "quaternion.hpp"
+    "quaternion.cpp"
+    "axis_angle.hpp"
+    "axis_angle.cpp"
+    "polar.hpp"
+    "polar.cpp"
     )
 
 # (optional) Search and ling with 3rd party libraries
