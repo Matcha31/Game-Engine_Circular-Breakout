@@ -19,15 +19,17 @@ target_sources(PA199_project
 )
 
 # Add sub-directories of your libraries
-add_subdirectory("some_my_library_dir")  # This includes the tutorial library. Can be removed.
-add_subdirectory("math")  # This includes the tutorial library. Can be removed.
+add_subdirectory("some_my_library_dir")
+add_subdirectory("math")
+add_subdirectory("engine")
 
 # Include your liblaries to linking of the project.
 target_link_libraries(PA199_project
     PUBLIC 
         lodepng # This links the lodepng library. Do not remove.
-        "some_my_library" # This links the tutorial library. Can be removed.
+        "some_my_library" # TO REMOVE
         "math"
+        "engine"
 )
 
 # Includes 'unit_tests' project to the build. DO NOT MODIFY THIS COMMAND:

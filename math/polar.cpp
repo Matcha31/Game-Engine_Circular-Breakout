@@ -5,8 +5,7 @@
 
 namespace
 {
-    constexpr float PI     = 3.14159265358979323846f;
-    constexpr float TWO_PI = 2.0f * PI;
+    constexpr float TWO_PI = 2.0f * M_PI;
 
     inline float normalizeAngleTo0_2pi(float angle)
     {
