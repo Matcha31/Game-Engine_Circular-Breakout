@@ -7,6 +7,8 @@ add_library(graphics
     "mesh.cpp"
     "procedural.hpp"
     "procedural.cpp"
+    "texture2d.hpp"
+    "texture2d.cpp"
     )
 
 # (optional) Search and ling with 3rd party libraries

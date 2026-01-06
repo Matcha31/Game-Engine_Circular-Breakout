@@ -1,10 +1,7 @@
 #include "mesh.hpp"
 #include <cassert>
 
-Mesh::Mesh()
-    : vao(0), vbo(0), ibo(0), indexCount(0)
-{
-}
+Mesh::Mesh() : vao(0), vbo(0), ibo(0), indexCount(0) {}
 
 Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<GLuint>& indices)
     : vao(0), vbo(0), ibo(0), indexCount(0)
@@ -23,21 +20,12 @@ Mesh::Mesh(Mesh&& other) noexcept
 
 Mesh& Mesh::operator=(Mesh&& other) noexcept
 {
-    if (this == &other)
-        return *this;
-
+    if (this == &other) return *this;
     destroy();
 
-    vao = other.vao;
-    vbo = other.vbo;
-    ibo = other.ibo;
-    indexCount = other.indexCount;
+    vao = other.vao; vbo = other.vbo; ibo = other.ibo; indexCount = other.indexCount;
 
-    other.vao = 0;
-    other.vbo = 0;
-    other.ibo = 0;
-    other.indexCount = 0;
-
+    other.vao = 0; other.vbo = 0; other.ibo = 0; other.indexCount = 0;
     return *this;
 }
 
@@ -52,16 +40,12 @@ void Mesh::destroy()
     if (vbo) glDeleteBuffers(1, &vbo);
     if (vao) glDeleteVertexArrays(1, &vao);
 
-    vao = 0;
-    vbo = 0;
-    ibo = 0;
-    indexCount = 0;
+    vao = 0; vbo = 0; ibo = 0; indexCount = 0;
 }
 
 void Mesh::upload(const std::vector<Vertex>& vertices, const std::vector<GLuint>& indices)
 {
     destroy();
-
     indexCount = static_cast<GLsizei>(indices.size());
 
     glGenVertexArrays(1, &vao);
@@ -77,18 +61,17 @@ void Mesh::upload(const std::vector<Vertex>& vertices, const std::vector<GLuint>
     assert(glGetError() == 0U);
 
     glEnableVertexAttribArray(0);
-    assert(glGetError() == 0U);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-    assert(glGetError() == 0U);
 
     glEnableVertexAttribArray(1);
-    assert(glGetError() == 0U);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(3 * sizeof(float)));
-    assert(glGetError() == 0U);
 
     glEnableVertexAttribArray(2);
-    assert(glGetError() == 0U);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(6 * sizeof(float)));
+
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(9 * sizeof(float)));
+
     assert(glGetError() == 0U);
 
     glGenBuffers(1, &ibo);
