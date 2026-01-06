@@ -8,7 +8,7 @@ class Frame
 {
 public:
     Frame* parent;
-    Vec4 position;        // x,y,z used, w ignored
+    Vec4 position; // x,y,z used, w ignored
     Quaternion orientation;
 
     Frame();

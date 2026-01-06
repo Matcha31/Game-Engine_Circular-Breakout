@@ -11,7 +11,6 @@ public:
     Quaternion();  
     Quaternion(float x, float y, float z, float w);
 
-    // Conjugate: reverse sign of vector part  
     Quaternion conjugate() const;
 
     float length() const;
@@ -22,7 +21,6 @@ public:
 
     Quaternion inverse() const;
 
-    // Dot product
     static float dot(const Quaternion& a, const Quaternion& b);
 
     // SLERP
@@ -31,9 +29,7 @@ public:
         const Quaternion& b,
         float t);
 
-    // Convert to AxisAngle
     AxisAngle toAxisAngle() const;
 
-    // Optional: to rotation matrix
     Mat4 toRotationMatrix() const;
 };

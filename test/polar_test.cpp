@@ -3,8 +3,7 @@
 
 // For comparison with "nice" angles
 namespace {
-    constexpr float PI     = 3.14159265358979323846f;
-    constexpr float TWO_PI = 2.0f * PI;
+    constexpr float TWO_PI = 2.0f * M_PI;
 }
 
 TEST(Polar, NormalizeAngleInPlace_PositiveWrap)
@@ -17,19 +16,19 @@ TEST(Polar, NormalizeAngleInPlace_PositiveWrap)
 
 TEST(Polar, NormalizeAngleInPlace_NegativeAngle)
 {
-    Polar p(1.0f, -PI / 2.0f); // -90°
+    Polar p(1.0f, -M_PI / 2.0f); // -90°
     p.normalizeAngleInPlace();
 
-    EXPECT_NEAR(p.a, 1.5f * PI, 1e-6f); // 3π/2
+    EXPECT_NEAR(p.a, 1.5f * M_PI, 1e-6f); // 3π/2
 }
 
 TEST(Polar, NormalizedAngle_DoesNotModifyOriginal)
 {
-    Polar p(1.0f, -PI);
+    Polar p(1.0f, -M_PI);
     Polar n = p.normalizedAngle();
 
-    EXPECT_FLOAT_EQ(p.a, -PI);             // original unchanged
-    EXPECT_NEAR(n.a, PI, 1e-6f);           // -π → π
+    EXPECT_FLOAT_EQ(p.a, -M_PI);             // original unchanged
+    EXPECT_NEAR(n.a, M_PI, 1e-6f);           // -π → π
 }
 
 TEST(Polar, FromCartesian_UnitX)
@@ -47,7 +46,7 @@ TEST(Polar, FromCartesian_UnitY)
     Polar p = Polar::fromCartesian(v);
 
     EXPECT_NEAR(p.r, 1.0f, 1e-6f);
-    EXPECT_NEAR(p.a, PI / 2.0f, 1e-6f);
+    EXPECT_NEAR(p.a, M_PI / 2.0f, 1e-6f);
 }
 
 TEST(Polar, FromCartesian_NegativeX)
@@ -56,7 +55,7 @@ TEST(Polar, FromCartesian_NegativeX)
     Polar p = Polar::fromCartesian(v);
 
     EXPECT_NEAR(p.r, 1.0f, 1e-6f);
-    EXPECT_NEAR(p.a, PI, 1e-6f);
+    EXPECT_NEAR(p.a, M_PI, 1e-6f);
 }
 
 TEST(Polar, FromCartesian_NegativeY)
@@ -65,7 +64,7 @@ TEST(Polar, FromCartesian_NegativeY)
     Polar p = Polar::fromCartesian(v);
 
     EXPECT_NEAR(p.r, 1.0f, 1e-6f);
-    EXPECT_NEAR(p.a, 1.5f * PI, 1e-6f); // 3π/2
+    EXPECT_NEAR(p.a, 1.5f * M_PI, 1e-6f); // 3π/2
 }
 
 TEST(Polar, FromCartesian_ZeroVector)
@@ -80,7 +79,7 @@ TEST(Polar, FromCartesian_ZeroVector)
 TEST(Polar, ToCartesian_AxisAligned)
 {
     Polar p1(1.0f, 0.0f);        // along +X
-    Polar p2(1.0f, PI / 2.0f);   // along +Y
+    Polar p2(1.0f, M_PI / 2.0f);   // along +Y
 
     Vec4 v1 = p1.toCartesian();
     Vec4 v2 = p2.toCartesian();

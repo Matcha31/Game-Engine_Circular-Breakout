@@ -15,13 +15,13 @@ find_package(lodepng CONFIG REQUIRED)
 
 target_sources(PA199_project
     # Here you can add more source files to the excutable of the game.
-    PUBLIC "some_game_file.cpp" # This includes the tutorial file. Can be removed.
+    PUBLIC "some_game_file.cpp" # TO REMOVE
 )
 
 # Add sub-directories of your libraries
 add_subdirectory("some_my_library_dir")
 add_subdirectory("math")
-add_subdirectory("engine")
+add_subdirectory("graphics")
 
 # Include your liblaries to linking of the project.
 target_link_libraries(PA199_project
@@ -29,7 +29,7 @@ target_link_libraries(PA199_project
         lodepng # This links the lodepng library. Do not remove.
         "some_my_library" # TO REMOVE
         "math"
-        "engine"
+        "graphics"
 )
 
 # Includes 'unit_tests' project to the build. DO NOT MODIFY THIS COMMAND:

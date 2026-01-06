@@ -2,27 +2,41 @@
 #include "iapplication.h"
 #include "glad/glad.h"
 
-#include "engine/camera.hpp"
+#include "graphics/camera.hpp"
+#include "graphics/mesh.hpp"
 
 class Application : public IApplication {
   private:
     Camera camera;
 
-    GLuint vertex_shader;
-    GLuint fragment_shader;
-    GLuint shader_program;
+    Mesh paddle_mesh;
+    Mesh brick_mesh;
+    Mesh ground_mesh;
+    Mesh sphere_mesh;
+
+    GLuint axis_vertex_shader;
+    GLuint axis_fragment_shader;
+    GLuint axis_program;
+
+    GLuint lit_vertex_shader;
+    GLuint lit_fragment_shader;
+    GLuint lit_program;
 
     GLuint axes_vao;
     GLuint axes_vbo;
 
-    GLuint ground_vao;
-    GLuint ground_vbo;
-    GLuint ground_ibo;
-    GLsizei ground_index_count;
+    GLint axis_u_model;
+    GLint axis_u_view;
+    GLint axis_u_proj;
 
-    GLint u_model_loc;
-    GLint u_view_loc;
-    GLint u_proj_loc;
+    GLint lit_u_model;
+    GLint lit_u_view;
+    GLint lit_u_proj;
+    GLint lit_u_light_dir;
+    GLint lit_u_camera_pos;
+    GLint lit_u_ambient;
+    GLint lit_u_specular;
+    GLint lit_u_shininess;
 
   public:
     Application(int initial_width, int initial_height, std::vector<std::string> arguments = {});
