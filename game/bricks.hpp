@@ -7,8 +7,8 @@ struct Brick
     float a_center = 0.0f;
     float a_half_span = 0.10f;
 
-    float r_inner = 1.75f;
-    float r_outer = 1.90f;
+    float r_inner = 1.05f;
+    float r_outer = 1.25f;
 
     bool alive = true;
 };

@@ -39,7 +39,6 @@ void GameState::launch()
 
     mode = GameMode::Playing;
 
-    ball_r = 0.35f;
     ball_a = paddle_angle;
 
     ball_radial_speed = 0.25f;

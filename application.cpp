@@ -27,6 +27,46 @@
 
 namespace
 {
+    struct SceneScale
+    {
+        float ground_r = 2.2f;
+        int ground_segments = 160;
+        float ground_uv_tiling = 6.0f;
+
+        float paddle_r_inner = 1.70f;
+        float paddle_r_outer = 1.90f;
+        float paddle_half_span = 0.22f;
+
+        float brick_r_inner = 0.60f;
+        float brick_r_outer = 0.80f;
+        float brick_half_span = 0.10f;
+
+        int bricks_per_ring = 28;
+
+        int brick_rows = 4;
+        float brick_row_gap = 0.03f;
+
+        float ball_radius = 0.06f;
+
+        float axis_len = 3.0f;
+        float axis_z = 0.002f;
+
+        float outer_limit_r = 2.05f;
+    };
+
+    static SceneScale S;
+
+    static float ball_spawn_r()
+    {
+        float inner = S.brick_r_outer + S.ball_radius + 0.08f;
+        float outer = S.paddle_r_inner - S.ball_radius - 0.08f;
+        if (outer <= inner) return S.brick_r_outer + S.ball_radius + 0.05f;
+        return 0.5f * (inner + outer);
+    }
+}
+
+namespace
+{
     struct AxisVertex
     {
         float x, y, z;
@@ -224,16 +264,21 @@ namespace
             std::vector<Mesh::Vertex> v;
             std::vector<GLuint> idx;
 
-            float innerR = 1.40f;
-            float outerR = 1.60f;
-            float halfSpan = 0.25f;
-            int segments = 48;
-            float z = 0.02f;
+            float z0 = 0.02f;
+            float z1 = 0.10f;
 
-            procedural::makeRingSegmentFlat(innerR, outerR, -halfSpan, +halfSpan, segments, z,
-                                            0.90f, 0.60f, 0.20f, v, idx);
+            procedural::makeRingSegmentSolid(
+                    S.paddle_r_inner,
+                    S.paddle_r_outer,
+                    -S.paddle_half_span,
+                    +S.paddle_half_span,
+                    64,
+                    z0,
+                    z1,
+                    0.90f, 0.60f, 0.20f,
+                    v, idx
+                    );
 
-            for (auto& vert : v) { vert.u = 0.0f; vert.v = 0.0f; }
             paddle.upload(v, idx);
         }
 
@@ -241,16 +286,20 @@ namespace
             std::vector<Mesh::Vertex> v;
             std::vector<GLuint> idx;
 
-            float innerR = 1.75f;
-            float outerR = 1.90f;
-            float halfSpan = 0.10f;
-            int segments = 24;
-            float z = 0.02f;
+            float z0 = 0.02f;
+            float z1 = 0.12f;
 
-            procedural::makeRingSegmentFlat(innerR, outerR, -halfSpan, +halfSpan, segments, z,
-                                            0.80f, 0.30f, 0.30f, v, idx);
-
-            for (auto& vert : v) { vert.u = 0.0f; vert.v = 0.0f; }
+            procedural::makeRingSegmentSolid(
+                    S.brick_r_inner,
+                    S.brick_r_outer,
+                    -S.brick_half_span,
+                    +S.brick_half_span,
+                    32,
+                    z0,
+                    z1,
+                    0.80f, 0.30f, 0.30f,
+                    v, idx
+                    );
             brick.upload(v, idx);
         }
     }
@@ -304,7 +353,7 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     , lit_u_camera_pos(-1)
     , lit_u_ambient(-1)
     , lit_u_specular(-1)
-    , lit_u_shininess(-1)
+      , lit_u_shininess(-1)
 {
     glViewport(0, 0, width, height);
 
@@ -368,10 +417,16 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     g_screen_uTex = glGetUniformLocation(g_screen_prog, "uTex");
     assert(g_screen_uTex != -1);
 
-    buildAxes(axes_vao, axes_vbo, 3.0f);
-
-    buildGroundDiscTextured(ground_mesh, 2.0f, 128, 0.0f, 1.0f, 1.0f, 1.0f, 4.0f);
-    buildSphere(sphere_mesh, 0.20f, 24, 48, 0.90f, 0.90f, 0.90f);
+    // buildAxes(axes_vao, axes_vbo, 3.0f);
+    buildGroundDiscTextured(
+            ground_mesh,
+            S.ground_r,
+            S.ground_segments,
+            0.0f,
+            1.0f, 1.0f, 1.0f,
+            S.ground_uv_tiling
+            );
+    buildSphere(sphere_mesh, S.ball_radius, 24, 48, 0.95f, 0.95f, 0.95f);
     buildPaddleAndBrickMeshes(paddle_mesh, brick_mesh);
 
     buildScreenQuad(g_screenVao, g_screenVbo);
@@ -384,14 +439,18 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
 
     g_state.reset();
+    g_state.outer_limit_r = S.outer_limit_r;
+    g_state.ball_r = ball_spawn_r();
+    g_state.ball_a = g_state.paddle_angle;
 
+    const int n = S.bricks_per_ring;
     g_bricks.build_ring(
-            12,
-            -1.10f,
-            0.20f,
-            0.10f,
-            1.75f,
-            1.90f
+            n,
+            0.0f,
+            (float)(2.0 * M_PI / (double)n),
+            S.brick_half_span,
+            S.brick_r_inner,
+            S.brick_r_outer
             );
 }
 
@@ -407,7 +466,7 @@ Application::~Application()
     if (g_texlit_prog) glDeleteProgram(g_texlit_prog);
 
     if (lit_program) glDeleteProgram(lit_program);
-    if (axis_program) glDeleteProgram(axis_program);
+    // if (axis_program) glDeleteProgram(axis_program);
 
     if (g_screen_fs) glDeleteShader(g_screen_fs);
     if (g_screen_vs) glDeleteShader(g_screen_vs);
@@ -418,8 +477,8 @@ Application::~Application()
     if (lit_fragment_shader) glDeleteShader(lit_fragment_shader);
     if (lit_vertex_shader) glDeleteShader(lit_vertex_shader);
 
-    if (axis_fragment_shader) glDeleteShader(axis_fragment_shader);
-    if (axis_vertex_shader) glDeleteShader(axis_vertex_shader);
+    // if (axis_fragment_shader) glDeleteShader(axis_fragment_shader);
+    // if (axis_vertex_shader) glDeleteShader(axis_vertex_shader);
 }
 
 void Application::update(float delta)
@@ -452,7 +511,7 @@ void Application::render()
     glUniform3f(g_texlit_uLightDir, lightDir.x, lightDir.y, lightDir.z);
     glUniform3f(g_texlit_uCameraPos, camPos.x, camPos.y, camPos.z);
 
-    glUniform1f(g_texlit_uAmbient, 0.20f);
+    glUniform1f(g_texlit_uAmbient, 0.50f);
     glUniform1f(g_texlit_uSpecular, 0.50f);
     glUniform1f(g_texlit_uShininess, 48.0f);
 
@@ -484,7 +543,7 @@ void Application::render()
         Mat4 model = Mat4::identity();
         model(0, 3) = x;
         model(1, 3) = y;
-        model(2, 3) = 0.20f;
+        model(2, 3) = S.ball_radius;
 
         setMat4(lit_u_model, model);
         sphere_mesh.draw();
@@ -512,20 +571,20 @@ void Application::render()
         }
     }
 
-    glUseProgram(axis_program);
-
-    {
-        Mat4 model = Mat4::identity();
-        model(2, 3) = 0.001f;
-
-        setMat4(axis_u_model, model);
-        setMat4(axis_u_view, view);
-        setMat4(axis_u_proj, proj);
-
-        glBindVertexArray(axes_vao);
-        glDrawArrays(GL_LINES, 0, 6);
-        glBindVertexArray(0);
-    }
+    // glUseProgram(axis_program);
+    //
+    // {
+    //     Mat4 model = Mat4::identity();
+    //     model(2, 3) = 0.001f;
+    //
+    //     setMat4(axis_u_model, model);
+    //     setMat4(axis_u_view, view);
+    //     setMat4(axis_u_proj, proj);
+    //
+    //     glBindVertexArray(axes_vao);
+    //     glDrawArrays(GL_LINES, 0, 6);
+    //     glBindVertexArray(0);
+    // }
 
     if (g_state.mode == GameMode::Paused && g_pausedTex.valid())
     {
@@ -580,6 +639,8 @@ void Application::on_resize(int w, int h)
     IApplication::on_resize(w, h);
     glViewport(0, 0, w, h);
     camera.setViewportSize(w, h);
+    camera.getFrame().position = Vec4(0.0f, -3.4f, 2.6f, 1.0f);
+    camera.getFrame().orientation = Quaternion(0.35f, 0.0f, 0.0f, 0.94f).normalized();
 }
 
 void Application::on_mouse_move(double x, double y) { (void)x; (void)y; }
@@ -603,6 +664,10 @@ void Application::on_key_pressed(int key, int scancode, int action, int mods)
     if (g_input.reset_pressed)
     {
         g_state.reset();
+        g_state.outer_limit_r = S.outer_limit_r;
+        g_state.ball_r = ball_spawn_r();
+        g_state.ball_a = g_state.paddle_angle;
+
         g_bricks.build_ring(12, -1.10f, 0.20f, 0.10f, 1.75f, 1.90f);
     }
 }
