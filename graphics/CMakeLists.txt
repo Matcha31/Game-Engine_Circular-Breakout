@@ -9,6 +9,8 @@ add_library(graphics
     "procedural.cpp"
     "texture2d.hpp"
     "texture2d.cpp"
+    "shader.hpp"
+    "shader.cpp"
     )
 
 # (optional) Search and ling with 3rd party libraries

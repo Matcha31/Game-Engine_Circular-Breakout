@@ -90,7 +90,6 @@ void Camera::setOrtho(float halfHeight, float nearP, float farP)
 
 Mat4 Camera::viewMatrix() const
 {
-    // Frame::fromWorldMatrix gives world → frame; for camera, that is view.
     return frame.fromWorldMatrix();
 }
 

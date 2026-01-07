@@ -6,82 +6,58 @@
 #include "graphics/mesh.hpp"
 #include "graphics/procedural.hpp"
 #include "graphics/texture2d.hpp"
+#include "graphics/shader.hpp"
 
 #include "math/axis_angle.hpp"
 #include "math/quaternion.hpp"
 #include "math/mat4.hpp"
 #include "math/vec4.hpp"
 
+#include "game/game_state.hpp"
+#include "game/input.hpp"
+#include "game/bricks.hpp"
+
+#include "physics/collision.hpp"
+
 #include <cassert>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
-#include <iostream>
 #include <string>
 #include <vector>
 
 namespace
 {
-    GLuint compileShader(const std::filesystem::path& path, GLenum type)
-    {
-        GLuint shader = glCreateShader(type);
-        assert(glGetError() == 0U && shader != 0);
-
-        std::ifstream ifs(path);
-        assert(ifs.is_open());
-        std::string src((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-
-        const char* code = src.c_str();
-        glShaderSource(shader, 1, &code, nullptr);
-        glCompileShader(shader);
-
-        GLint ok = 0;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-        if (!ok)
-        {
-            GLint len = 0;
-            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
-            std::string log(len, '\0');
-            glGetShaderInfoLog(shader, len, nullptr, log.data());
-            std::cerr << "Shader compile error in " << path << ":\n" << log << std::endl;
-            assert(false);
-        }
-
-        return shader;
-    }
-
-    GLuint linkProgram(GLuint vs, GLuint fs)
-    {
-        GLuint program = glCreateProgram();
-        assert(glGetError() == 0U && program != 0);
-
-        glAttachShader(program, vs);
-        glAttachShader(program, fs);
-        glLinkProgram(program);
-
-        GLint ok = 0;
-        glGetProgramiv(program, GL_LINK_STATUS, &ok);
-        if (!ok)
-        {
-            GLint len = 0;
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &len);
-            std::string log(len, '\0');
-            glGetProgramInfoLog(program, len, nullptr, log.data());
-            std::cerr << "Program link error:\n" << log << std::endl;
-            assert(false);
-        }
-
-        glDetachShader(program, vs);
-        glDetachShader(program, fs);
-
-        return program;
-    }
-
     struct AxisVertex
     {
         float x, y, z;
         float r, g, b;
     };
+
+    float wrapAngle0To2Pi(float a)
+    {
+        const float twoPi = (float)(2.0 * M_PI);
+        a = std::fmod(a, twoPi);
+        if (a < 0.0f) a += twoPi;
+        return a;
+    }
+
+    Vec4 normalize3(Vec4 v)
+    {
+        float len = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+        if (len == 0.0f) return Vec4(0.0f, 0.0f, 1.0f, 0.0f);
+        return Vec4(v.x / len, v.y / len, v.z / len, 0.0f);
+    }
+
+    Mat4 rotationZ(float angle)
+    {
+        AxisAngle aa(Vec4(0.0f, 0.0f, 1.0f, 0.0f), angle);
+        return aa.toQuaternion().toRotationMatrix();
+    }
+
+    void setMat4(GLint loc, const Mat4& m)
+    {
+        glUniformMatrix4fv(loc, 1, GL_FALSE, m.m);
+    }
 
     void buildAxes(GLuint& vao, GLuint& vbo, float axisLen)
     {
@@ -112,13 +88,42 @@ namespace
         glBindVertexArray(0);
     }
 
+    void buildScreenQuad(GLuint& vao, GLuint& vbo)
+    {
+        struct V { float x, y, u, v; };
+        V verts[6] = {
+            {-1.f, -1.f, 0.f, 0.f},
+            { 1.f, -1.f, 1.f, 0.f},
+            { 1.f,  1.f, 1.f, 1.f},
+
+            {-1.f, -1.f, 0.f, 0.f},
+            { 1.f,  1.f, 1.f, 1.f},
+            {-1.f,  1.f, 0.f, 1.f},
+        };
+
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+
+        glGenBuffers(1, &vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(V), (void*)0);
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(V), (void*)(2 * sizeof(float)));
+
+        glBindVertexArray(0);
+    }
+
     void buildGroundDiscTextured(Mesh& mesh, float radius, int segments, float z, float cr, float cg, float cb, float uvTiling)
     {
         std::vector<Mesh::Vertex> v;
         std::vector<GLuint> idx;
 
-        v.reserve(static_cast<size_t>(segments + 1));
-        idx.reserve(static_cast<size_t>(segments * 3));
+        v.reserve((size_t)segments + 1);
+        idx.reserve((size_t)segments * 3);
 
         auto uvFromXY = [&](float x, float y) -> std::pair<float,float> {
             float u = (x / (2.0f * radius) + 0.5f) * uvTiling;
@@ -133,7 +138,7 @@ namespace
 
         for (int i = 0; i < segments; ++i)
         {
-            float a = (2.0f * M_PI * static_cast<float>(i)) / static_cast<float>(segments);
+            float a = (float)(2.0 * M_PI) * (float)i / (float)segments;
             float x = radius * std::cos(a);
             float y = radius * std::sin(a);
             auto uv = uvFromXY(x, y);
@@ -143,8 +148,8 @@ namespace
         for (int i = 0; i < segments; ++i)
         {
             GLuint c = 0;
-            GLuint i0 = static_cast<GLuint>(i + 1);
-            GLuint i1 = static_cast<GLuint>((i + 1) % segments + 1);
+            GLuint i0 = (GLuint)(i + 1);
+            GLuint i1 = (GLuint)((i + 1) % segments + 1);
             idx.push_back(c);
             idx.push_back(i0);
             idx.push_back(i1);
@@ -158,20 +163,20 @@ namespace
         std::vector<Mesh::Vertex> v;
         std::vector<GLuint> idx;
 
-        v.reserve(static_cast<size_t>((stacks + 1) * (slices + 1)));
-        idx.reserve(static_cast<size_t>(stacks * slices * 6));
+        v.reserve((size_t)(stacks + 1) * (size_t)(slices + 1));
+        idx.reserve((size_t)stacks * (size_t)slices * 6);
 
         for (int i = 0; i <= stacks; ++i)
         {
-            float t = static_cast<float>(i) / static_cast<float>(stacks);
-            float theta = t * M_PI;
+            float t = (float)i / (float)stacks;
+            float theta = (float)M_PI * t;
             float st = std::sin(theta);
             float ct = std::cos(theta);
 
             for (int j = 0; j <= slices; ++j)
             {
-                float s = static_cast<float>(j) / static_cast<float>(slices);
-                float phi = s * 2.0f * M_PI;
+                float s = (float)j / (float)slices;
+                float phi = (float)(2.0 * M_PI) * s;
                 float sp = std::sin(phi);
                 float cp = std::cos(phi);
 
@@ -228,12 +233,7 @@ namespace
             procedural::makeRingSegmentFlat(innerR, outerR, -halfSpan, +halfSpan, segments, z,
                                             0.90f, 0.60f, 0.20f, v, idx);
 
-            for (auto& vert : v)
-            {
-                vert.u = 0.0f;
-                vert.v = 0.0f;
-            }
-
+            for (auto& vert : v) { vert.u = 0.0f; vert.v = 0.0f; }
             paddle.upload(v, idx);
         }
 
@@ -250,63 +250,17 @@ namespace
             procedural::makeRingSegmentFlat(innerR, outerR, -halfSpan, +halfSpan, segments, z,
                                             0.80f, 0.30f, 0.30f, v, idx);
 
-            for (auto& vert : v)
-            {
-                vert.u = 0.0f;
-                vert.v = 0.0f;
-            }
-
+            for (auto& vert : v) { vert.u = 0.0f; vert.v = 0.0f; }
             brick.upload(v, idx);
         }
     }
-
-    Mat4 rotationZ(float angle)
-    {
-        AxisAngle aa(Vec4(0.0f, 0.0f, 1.0f, 0.0f), angle);
-        return aa.toQuaternion().toRotationMatrix();
-    }
-
-    Vec4 normalize3(Vec4 v)
-    {
-        float len = std::sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
-        if (len == 0.0f) return Vec4(0.0f, 0.0f, 1.0f, 0.0f);
-        return Vec4(v.x/len, v.y/len, v.z/len, 0.0f);
-    }
-
-    void setMat4(GLint loc, const Mat4& m)
-    {
-        glUniformMatrix4fv(loc, 1, GL_FALSE, m.m);
-    }
-
-    void buildScreenQuad(GLuint& vao, GLuint& vbo)
-    {
-        struct V { float x,y,u,v; };
-        V verts[6] = {
-            {-1.f, -1.f, 0.f, 0.f},
-            { 1.f, -1.f, 1.f, 0.f},
-            { 1.f,  1.f, 1.f, 1.f},
-
-            {-1.f, -1.f, 0.f, 0.f},
-            { 1.f,  1.f, 1.f, 1.f},
-            {-1.f,  1.f, 0.f, 1.f},
-        };
-
-        glGenVertexArrays(1, &vao);
-        glBindVertexArray(vao);
-
-        glGenBuffers(1, &vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(V), (void*)0);
-
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(V), (void*)(2 * sizeof(float)));
-
-        glBindVertexArray(0);
-    }
 }
+
+static GameState g_state;
+static InputState g_input;
+static BrickField g_bricks;
+
+static game::CollisionConfig g_col_cfg;
 
 static Texture2D g_groundTex;
 static Texture2D g_pausedTex;
@@ -324,8 +278,6 @@ static GLint g_texlit_uTex = -1;
 static GLint g_screen_uTex = -1;
 
 static GLuint g_screenVao = 0, g_screenVbo = 0;
-
-static bool g_showPaused = false;
 
 Application::Application(int initial_width, int initial_height, std::vector<std::string> arguments)
     : IApplication(initial_width, initial_height, arguments)
@@ -355,27 +307,28 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     , lit_u_shininess(-1)
 {
     glViewport(0, 0, width, height);
+
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     camera.setViewportSize(width, height);
 
-    axis_vertex_shader = compileShader(lecture_folder_path / "data" / "shaders" / "axis.vert", GL_VERTEX_SHADER);
-    axis_fragment_shader = compileShader(lecture_folder_path / "data" / "shaders" / "axis.frag", GL_FRAGMENT_SHADER);
-    axis_program = linkProgram(axis_vertex_shader, axis_fragment_shader);
+    axis_vertex_shader = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "axis.vert", GL_VERTEX_SHADER);
+    axis_fragment_shader = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "axis.frag", GL_FRAGMENT_SHADER);
+    axis_program = gfx::link_program(axis_vertex_shader, axis_fragment_shader);
 
-    lit_vertex_shader = compileShader(lecture_folder_path / "data" / "shaders" / "lit.vert", GL_VERTEX_SHADER);
-    lit_fragment_shader = compileShader(lecture_folder_path / "data" / "shaders" / "lit.frag", GL_FRAGMENT_SHADER);
-    lit_program = linkProgram(lit_vertex_shader, lit_fragment_shader);
+    lit_vertex_shader = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "lit.vert", GL_VERTEX_SHADER);
+    lit_fragment_shader = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "lit.frag", GL_FRAGMENT_SHADER);
+    lit_program = gfx::link_program(lit_vertex_shader, lit_fragment_shader);
 
-    g_texlit_vs = compileShader(lecture_folder_path / "data" / "shaders" / "texlit.vert", GL_VERTEX_SHADER);
-    g_texlit_fs = compileShader(lecture_folder_path / "data" / "shaders" / "texlit.frag", GL_FRAGMENT_SHADER);
-    g_texlit_prog = linkProgram(g_texlit_vs, g_texlit_fs);
+    g_texlit_vs = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "texlit.vert", GL_VERTEX_SHADER);
+    g_texlit_fs = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "texlit.frag", GL_FRAGMENT_SHADER);
+    g_texlit_prog = gfx::link_program(g_texlit_vs, g_texlit_fs);
 
-    g_screen_vs = compileShader(lecture_folder_path / "data" / "shaders" / "screen.vert", GL_VERTEX_SHADER);
-    g_screen_fs = compileShader(lecture_folder_path / "data" / "shaders" / "screen.frag", GL_FRAGMENT_SHADER);
-    g_screen_prog = linkProgram(g_screen_vs, g_screen_fs);
+    g_screen_vs = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "screen.vert", GL_VERTEX_SHADER);
+    g_screen_fs = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "screen.frag", GL_FRAGMENT_SHADER);
+    g_screen_prog = gfx::link_program(g_screen_vs, g_screen_fs);
 
     glUseProgram(axis_program);
     axis_u_model = glGetUniformLocation(axis_program, "uModel");
@@ -423,17 +376,23 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
 
     buildScreenQuad(g_screenVao, g_screenVbo);
 
-    bool okGround = g_groundTex.loadPNG(lecture_folder_path / "data" / "textures" / "ground.png");
-    bool okPaused = g_pausedTex.loadPNG(lecture_folder_path / "data" / "textures" / "pause.png", false);
-    bool okWin    = g_winTex.loadPNG(lecture_folder_path / "data" / "textures" / "you_win.png", false);
-    bool okOver   = g_gameOverTex.loadPNG(lecture_folder_path / "data" / "textures" / "game_over.png", false);
-
-    if (!okGround) std::cerr << "Failed to load ground texture\n";
-    if (!okPaused) std::cerr << "Failed to load paused texture\n";
-    if (!okWin)    std::cerr << "Failed to load you_win texture\n";
-    if (!okOver)   std::cerr << "Failed to load game_over texture\n";
+    g_groundTex.loadPNG(lecture_folder_path / "data" / "textures" / "ground.png");
+    g_pausedTex.loadPNG(lecture_folder_path / "data" / "textures" / "pause.png", false);
+    g_winTex.loadPNG(lecture_folder_path / "data" / "textures" / "you_win.png", false);
+    g_gameOverTex.loadPNG(lecture_folder_path / "data" / "textures" / "game_over.png", false);
 
     glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+
+    g_state.reset();
+
+    g_bricks.build_ring(
+            12,
+            -1.10f,
+            0.20f,
+            0.10f,
+            1.75f,
+            1.90f
+            );
 }
 
 Application::~Application()
@@ -465,7 +424,14 @@ Application::~Application()
 
 void Application::update(float delta)
 {
-    (void)delta;
+    g_state.left_down = g_input.left_down;
+    g_state.right_down = g_input.right_down;
+
+    g_state.update(delta);
+
+    game::resolve_collisions(g_state, g_bricks, g_col_cfg);
+
+    g_input.begin_frame();
 }
 
 void Application::render()
@@ -512,27 +478,35 @@ void Application::render()
     glUniform1f(lit_u_shininess, 48.0f);
 
     {
+        float x = g_state.ball_r * std::cos(g_state.ball_a);
+        float y = g_state.ball_r * std::sin(g_state.ball_a);
+
         Mat4 model = Mat4::identity();
+        model(0, 3) = x;
+        model(1, 3) = y;
         model(2, 3) = 0.20f;
+
         setMat4(lit_u_model, model);
         sphere_mesh.draw();
     }
 
     {
-        Mat4 model = Mat4::identity();
-        setMat4(lit_u_model, model);
-        paddle_mesh.draw();
+        for (int i = 0; i < 3; ++i)
+        {
+            float offset = (float)(2.0 * M_PI / 3.0) * (float)i;
+            Mat4 model = rotationZ(g_state.paddle_angle + offset);
+            setMat4(lit_u_model, model);
+            paddle_mesh.draw();
+        }
     }
 
     {
-        int count = 12;
-        float start = -1.10f;
-        float step = 0.20f;
-
-        for (int k = 0; k < count; ++k)
+        for (const Brick& b : g_bricks.bricks)
         {
-            float ang = start + step * static_cast<float>(k);
-            Mat4 model = rotationZ(ang);
+            if (!b.alive)
+                continue;
+
+            Mat4 model = rotationZ(b.a_center);
             setMat4(lit_u_model, model);
             brick_mesh.draw();
         }
@@ -543,6 +517,7 @@ void Application::render()
     {
         Mat4 model = Mat4::identity();
         model(2, 3) = 0.001f;
+
         setMat4(axis_u_model, model);
         setMat4(axis_u_view, view);
         setMat4(axis_u_proj, proj);
@@ -552,12 +527,43 @@ void Application::render()
         glBindVertexArray(0);
     }
 
-    if (g_showPaused && g_pausedTex.valid())
+    if (g_state.mode == GameMode::Paused && g_pausedTex.valid())
     {
         glDisable(GL_DEPTH_TEST);
+
         glUseProgram(g_screen_prog);
         glUniform1i(g_screen_uTex, 0);
         g_pausedTex.bind(GL_TEXTURE0);
+
+        glBindVertexArray(g_screenVao);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    if (g_state.mode == GameMode::GameOver && g_gameOverTex.valid())
+    {
+        glDisable(GL_DEPTH_TEST);
+
+        glUseProgram(g_screen_prog);
+        glUniform1i(g_screen_uTex, 0);
+        g_gameOverTex.bind(GL_TEXTURE0);
+
+        glBindVertexArray(g_screenVao);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+
+        glEnable(GL_DEPTH_TEST);
+    }
+
+    if (g_state.mode == GameMode::Win && g_winTex.valid())
+    {
+        glDisable(GL_DEPTH_TEST);
+
+        glUseProgram(g_screen_prog);
+        glUniform1i(g_screen_uTex, 0);
+        g_winTex.bind(GL_TEXTURE0);
 
         glBindVertexArray(g_screenVao);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -584,25 +590,19 @@ void Application::on_key_pressed(int key, int scancode, int action, int mods)
     (void)scancode;
     (void)mods;
 
-    if (action != GLFW_PRESS)
-        return;
+    g_input.handle_key(key, action);
 
-    switch (key)
+    if (action == GLFW_PRESS)
     {
-    case GLFW_KEY_1:
-        camera.setMode(Camera::Mode::Perspective);
-        break;
-    case GLFW_KEY_2:
-        camera.setMode(Camera::Mode::OrthoTop);
-        break;
-    case GLFW_KEY_P:
-        g_showPaused = !g_showPaused;
-        break;
-    case GLFW_KEY_R:
-        camera.getFrame().position = Vec4(0.0f, 0.0f, 5.0f, 1.0f);
-        camera.getFrame().orientation = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
-        break;
-    default:
-        break;
+        if (key == GLFW_KEY_1) camera.setMode(Camera::Mode::Perspective);
+        if (key == GLFW_KEY_2) camera.setMode(Camera::Mode::OrthoTop);
+    }
+
+    if (g_input.pause_pressed) g_state.toggle_pause();
+    if (g_input.launch_pressed) g_state.launch();
+    if (g_input.reset_pressed)
+    {
+        g_state.reset();
+        g_bricks.build_ring(12, -1.10f, 0.20f, 0.10f, 1.75f, 1.90f);
     }
 }

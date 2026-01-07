@@ -1,9 +1,6 @@
 #include "mat4.hpp"
 
-// Constructors
-
 Mat4::Mat4() {
-    // Identity
     for (int i = 0; i < 16; ++i) m[i] = 0.0f;
     m[0] = m[5] = m[10] = m[15] = 1.0f;
 }
@@ -22,11 +19,8 @@ Mat4::Mat4(const std::initializer_list<float>& list) {
         if (i >= n) break;
         m[i++] = v;
     }
-    // fill remaining numbers with zeros
     for (; i < 16; ++i) m[i] = 0.0f;
 }
-
-// Static constructors
 
 Mat4 Mat4::identity() {
     return Mat4();
@@ -38,9 +32,6 @@ Mat4 Mat4::zeros() {
     return r;
 }
 
-// Element access
-// Column-major: index = col*4 + row
-
 float& Mat4::operator()(int row, int col) {
     return m[col * 4 + row];
 }
@@ -48,8 +39,6 @@ float& Mat4::operator()(int row, int col) {
 float Mat4::operator()(int row, int col) const {
     return m[col * 4 + row];
 }
-
-// Matrix transpose
 
 Mat4 Mat4::transpose() const {
     Mat4 t(0.0f);
@@ -60,8 +49,6 @@ Mat4 Mat4::transpose() const {
     }
     return t;
 }
-
-// Matrix * Matrix
 
 Mat4 Mat4::operator*(const Mat4& rhs) const {
     Mat4 result(0.0f);
@@ -80,8 +67,6 @@ Mat4 Mat4::operator*(const Mat4& rhs) const {
 
     return result;
 }
-
-// Matrix * Vec4
 
 Vec4 Mat4::operator*(const Vec4& v) const {
     return Vec4(

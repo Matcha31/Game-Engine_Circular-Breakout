@@ -12,14 +12,12 @@ namespace
         if (!std::isfinite(angle))
             return 0.0f;
 
-        // Use explicit "number of revolutions" instead of fmod to be more stable
         float revolutions = std::floor(angle / TWO_PI);
         float a = angle - revolutions * TWO_PI;
 
         if (a < 0.0f)
             a += TWO_PI;
 
-        // Snap very close values to exact 0 to avoid 2π - eps issues
         const float eps = 1e-5f;
         if (std::fabs(a) < eps || std::fabs(a - TWO_PI) < eps)
             a = 0.0f;
