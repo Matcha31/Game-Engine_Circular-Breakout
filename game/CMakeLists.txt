@@ -5,6 +5,8 @@ add_library(game
     "input.cpp"
     "bricks.hpp"
     "bricks.cpp"
+    "physics.hpp"
+    "physics.cpp"
     )
 
 # (optional) Search and ling with 3rd party libraries

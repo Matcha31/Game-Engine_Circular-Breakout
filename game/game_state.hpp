@@ -22,6 +22,15 @@ struct GameState
     float ball_r = 0.35f;
     float ball_a = 0.0f;
 
+    float ball_x = 0.0f;
+    float ball_y = 0.0f;
+
+    float ball_vx = 0.0f;
+    float ball_vy = 0.0f;
+
+    float ball_speed = 0.8f;
+    bool ball_launched = false;
+
     float ball_radial_speed = 0.0f;
     float ball_angular_speed = 0.0f;
 

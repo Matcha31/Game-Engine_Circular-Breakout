@@ -25,6 +25,12 @@ void GameState::reset()
     ball_r = 0.35f;
     ball_a = 0.0f;
 
+    ball_x = 0.0f;
+    ball_y = 0.0f;
+    ball_vx = 0.0f;
+    ball_vy = 0.0f;
+    ball_launched = false;
+
     ball_radial_speed = 0.0f;
     ball_angular_speed = 0.0f;
 
@@ -38,11 +44,11 @@ void GameState::launch()
         return;
 
     mode = GameMode::Playing;
+    ball_launched = true;
 
-    ball_a = paddle_angle;
-
-    ball_radial_speed = 0.25f;
-    ball_angular_speed = 0.20f;
+    // ball_a = paddle_angle;
+    // ball_radial_speed = 0.25f;
+    // ball_angular_speed = 0.20f;
 }
 
 void GameState::toggle_pause()
@@ -84,15 +90,5 @@ void GameState::update(float dt)
     {
         ball_a = paddle_angle;
         return;
-    }
-
-    ball_a = wrap_angle_0_2pi(ball_a + ball_angular_speed * dt);
-    ball_r += ball_radial_speed * dt;
-
-    if (ball_r > outer_limit_r)
-    {
-        mode = GameMode::GameOver;
-        ball_radial_speed = 0.0f;
-        ball_angular_speed = 0.0f;
     }
 }

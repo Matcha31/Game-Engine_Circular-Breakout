@@ -16,8 +16,7 @@
 #include "game/game_state.hpp"
 #include "game/input.hpp"
 #include "game/bricks.hpp"
-
-#include "physics/collision.hpp"
+#include "game/physics.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -29,29 +28,32 @@ namespace
 {
     struct SceneScale
     {
-        float ground_r = 2.2f;
+        float ground_r = 2.5f;
         int ground_segments = 160;
         float ground_uv_tiling = 6.0f;
 
-        float paddle_r_inner = 1.70f;
-        float paddle_r_outer = 1.90f;
+        float paddle_r_inner = 2.00f;
+        float paddle_r_outer = 2.20f;
         float paddle_half_span = 0.22f;
 
         float brick_r_inner = 0.60f;
         float brick_r_outer = 0.80f;
         float brick_half_span = 0.10f;
 
-        int bricks_per_ring = 28;
+        int bricks_per_ring = 16;
+        float brick_z0 = 0.02f;
+        float brick_height = 0.10f;
+        float brick_row_gap_z = 0.00f;
 
         int brick_rows = 4;
         float brick_row_gap = 0.03f;
 
-        float ball_radius = 0.06f;
+        float ball_radius = 0.04f;
 
         float axis_len = 3.0f;
         float axis_z = 0.002f;
 
-        float outer_limit_r = 2.05f;
+        float outer_limit_r = 2.45f;
     };
 
     static SceneScale S;
@@ -258,14 +260,11 @@ namespace
         mesh.upload(v, idx);
     }
 
-    void buildPaddleAndBrickMeshes(Mesh& paddle, Mesh& brick)
+    void buildPaddleAndBrickMeshes(Mesh& paddle, Mesh& brick_a, Mesh& brick_b)
     {
         {
             std::vector<Mesh::Vertex> v;
             std::vector<GLuint> idx;
-
-            float z0 = 0.02f;
-            float z1 = 0.10f;
 
             procedural::makeRingSegmentSolid(
                     S.paddle_r_inner,
@@ -273,8 +272,8 @@ namespace
                     -S.paddle_half_span,
                     +S.paddle_half_span,
                     64,
-                    z0,
-                    z1,
+                    0.02f,
+                    0.10f,
                     0.90f, 0.60f, 0.20f,
                     v, idx
                     );
@@ -282,26 +281,38 @@ namespace
             paddle.upload(v, idx);
         }
 
+        auto buildBrick = [&](Mesh& out, float r, float g, float b)
         {
             std::vector<Mesh::Vertex> v;
             std::vector<GLuint> idx;
 
-            float z0 = 0.02f;
-            float z1 = 0.12f;
+            const int cols = S.bricks_per_ring;
+            const float a_half = (float)(M_PI / (double)cols);
+
+            float eps = 0.0005f;
+            float a0 = -a_half - eps;
+            float a1 = +a_half + eps;
+
+            float z0 = S.brick_z0;
+            float z1 = S.brick_z0 + S.brick_height;
 
             procedural::makeRingSegmentSolid(
                     S.brick_r_inner,
                     S.brick_r_outer,
-                    -S.brick_half_span,
-                    +S.brick_half_span,
+                    a0,
+                    a1,
                     32,
                     z0,
                     z1,
-                    0.80f, 0.30f, 0.30f,
+                    r, g, b,
                     v, idx
                     );
-            brick.upload(v, idx);
-        }
+
+            out.upload(v, idx);
+        };
+
+        buildBrick(brick_a, 0.75f, 0.35f, 0.30f);
+        buildBrick(brick_b, 0.25f, 0.65f, 0.35f);
     }
 }
 
@@ -309,12 +320,12 @@ static GameState g_state;
 static InputState g_input;
 static BrickField g_bricks;
 
-static game::CollisionConfig g_col_cfg;
-
 static Texture2D g_groundTex;
 static Texture2D g_pausedTex;
 static Texture2D g_winTex;
 static Texture2D g_gameOverTex;
+
+static physics::Config g_phys;
 
 static GLuint g_texlit_vs = 0, g_texlit_fs = 0, g_texlit_prog = 0;
 static GLuint g_screen_vs = 0, g_screen_fs = 0, g_screen_prog = 0;
@@ -332,7 +343,8 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     : IApplication(initial_width, initial_height, arguments)
     , camera()
     , paddle_mesh()
-    , brick_mesh()
+    , brick_mesh_a()
+    , brick_mesh_b()
     , ground_mesh()
     , sphere_mesh()
     , axis_vertex_shader(0)
@@ -427,7 +439,21 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
             S.ground_uv_tiling
             );
     buildSphere(sphere_mesh, S.ball_radius, 24, 48, 0.95f, 0.95f, 0.95f);
-    buildPaddleAndBrickMeshes(paddle_mesh, brick_mesh);
+    buildPaddleAndBrickMeshes(paddle_mesh, brick_mesh_a, brick_mesh_b);
+
+    physics::sync_config_from_scene(
+            g_phys,
+            S.outer_limit_r,
+            S.ball_radius,
+            3,
+            S.paddle_r_inner,
+            S.paddle_r_outer,
+            S.paddle_half_span,
+            S.bricks_per_ring,
+            S.brick_rows,
+            S.brick_r_inner,
+            S.brick_r_outer
+            );
 
     buildScreenQuad(g_screenVao, g_screenVbo);
 
@@ -441,17 +467,12 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     g_state.reset();
     g_state.outer_limit_r = S.outer_limit_r;
     g_state.ball_r = ball_spawn_r();
+    physics::place_ball_waiting(g_state, g_state.ball_r);
     g_state.ball_a = g_state.paddle_angle;
 
-    const int n = S.bricks_per_ring;
-    g_bricks.build_ring(
-            n,
-            0.0f,
-            (float)(2.0 * M_PI / (double)n),
-            S.brick_half_span,
-            S.brick_r_inner,
-            S.brick_r_outer
-            );
+    const int cols = S.bricks_per_ring;
+    const float a_half = (float)(M_PI / (double)cols);
+    g_bricks.build_wall(cols, S.brick_rows, 0.0f, a_half);
 }
 
 Application::~Application()
@@ -487,8 +508,7 @@ void Application::update(float delta)
     g_state.right_down = g_input.right_down;
 
     g_state.update(delta);
-
-    game::resolve_collisions(g_state, g_bricks, g_col_cfg);
+    physics::step(g_state, g_bricks, g_phys, delta);
 
     g_input.begin_frame();
 }
@@ -562,12 +582,18 @@ void Application::render()
     {
         for (const Brick& b : g_bricks.bricks)
         {
-            if (!b.alive)
-                continue;
+            if (!b.alive) continue;
 
             Mat4 model = rotationZ(b.a_center);
+
+            float z = S.brick_z0 + (float)b.row * (S.brick_height + S.brick_row_gap_z);
+            model(2, 3) = z;
+
             setMat4(lit_u_model, model);
-            brick_mesh.draw();
+
+            bool alt = ((b.col + b.row) & 1) != 0;
+            if (alt) brick_mesh_b.draw();
+            else     brick_mesh_a.draw();
         }
     }
 
@@ -660,14 +686,17 @@ void Application::on_key_pressed(int key, int scancode, int action, int mods)
     }
 
     if (g_input.pause_pressed) g_state.toggle_pause();
-    if (g_input.launch_pressed) g_state.launch();
+    if (g_input.launch_pressed) physics::launch_ball(g_state);
     if (g_input.reset_pressed)
     {
         g_state.reset();
         g_state.outer_limit_r = S.outer_limit_r;
         g_state.ball_r = ball_spawn_r();
+        physics::place_ball_waiting(g_state, g_state.ball_r);
         g_state.ball_a = g_state.paddle_angle;
 
-        g_bricks.build_ring(12, -1.10f, 0.20f, 0.10f, 1.75f, 1.90f);
+        const int cols = S.bricks_per_ring;
+        const float a_half = (float)(M_PI / (double)cols);
+        g_bricks.build_wall(cols, S.brick_rows, 0.0f, a_half);
     }
 }

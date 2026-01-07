@@ -10,7 +10,8 @@ class Application : public IApplication {
         Camera camera;
 
         Mesh paddle_mesh;
-        Mesh brick_mesh;
+        Mesh brick_mesh_a;
+        Mesh brick_mesh_b;
         Mesh ground_mesh;
         Mesh sphere_mesh;
 
