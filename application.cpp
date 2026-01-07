@@ -639,7 +639,7 @@ void Application::on_resize(int w, int h)
     IApplication::on_resize(w, h);
     glViewport(0, 0, w, h);
     camera.setViewportSize(w, h);
-    camera.getFrame().position = Vec4(0.0f, -3.4f, 2.6f, 1.0f);
+    camera.getFrame().position = Vec4(0.0f, -3.0f, 2.6f, 1.0f);
     camera.getFrame().orientation = Quaternion(0.35f, 0.0f, 0.0f, 0.94f).normalized();
 }
 
