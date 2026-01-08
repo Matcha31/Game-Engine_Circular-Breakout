@@ -12,7 +12,7 @@ namespace
     static Vec2 mul(Vec2 a, float s) { return {a.x * s, a.y * s}; }
 
     static float dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
-    static float len2(Vec2 a) { return dot(a,a); }
+    static float len2(Vec2 a) { return dot(a, a); }
     static float len(Vec2 a) { return std::sqrt(len2(a)); }
 
     static Vec2 normalize(Vec2 a)
@@ -54,13 +54,14 @@ namespace
 
     static Vec2 point_on_circle(float r, float a)
     {
-        return { r * std::cos(a), r * std::sin(a) };
+        return {r * std::cos(a), r * std::sin(a)};
     }
 
     static Vec2 closest_point_on_segment(Vec2 p, Vec2 a, Vec2 b)
     {
         Vec2 ab = sub(b, a);
-        float t = dot(sub(p, a), ab) / (dot(ab, ab) + 1e-12f);
+        float denom = dot(ab, ab) + 1e-12f;
+        float t = dot(sub(p, a), ab) / denom;
         t = clampf(t, 0.0f, 1.0f);
         return add(a, mul(ab, t));
     }
@@ -79,13 +80,31 @@ namespace
     struct Hit
     {
         bool hit = false;
-        Vec2 n{0,0};
+        Vec2 n{0, 0};
         float pen = 0.0f;
     };
 
+    static void try_point_hit(Vec2 p, float ball_radius, Vec2 q, Hit& best)
+    {
+        Vec2 diff = sub(p, q);
+        float d2 = len2(diff);
+        if (d2 >= ball_radius * ball_radius) return;
+
+        float d = std::sqrt(d2);
+        float pen = ball_radius - d;
+        Vec2 n = (d <= 1e-8f) ? normalize(p) : mul(diff, 1.0f / d);
+
+        if (!best.hit || pen > best.pen)
+        {
+            best.hit = true;
+            best.pen = pen;
+            best.n = n;
+        }
+    }
+
     static Hit collide_annular_sector(Vec2 p, float ball_radius,
-                                      float r_inner, float r_outer,
-                                      float a_center, float a_half)
+            float r_inner, float r_outer,
+            float a_center, float a_half)
     {
         Hit best;
 
@@ -97,26 +116,8 @@ namespace
         Vec2 q_inner = point_on_circle(r_inner, a_clamped);
         Vec2 q_outer = point_on_circle(r_outer, a_clamped);
 
-        auto try_point = [&](Vec2 q)
-        {
-            Vec2 diff = sub(p, q);
-            float dist2 = len2(diff);
-            if (dist2 >= ball_radius * ball_radius) return;
-
-            float dist = std::sqrt(dist2);
-            float pen = ball_radius - dist;
-            Vec2 n = (dist <= 1e-8f) ? normalize(p) : mul(diff, 1.0f / dist);
-
-            if (!best.hit || pen > best.pen)
-            {
-                best.hit = true;
-                best.pen = pen;
-                best.n = n;
-            }
-        };
-
-        try_point(q_inner);
-        try_point(q_outer);
+        try_point_hit(p, ball_radius, q_inner, best);
+        try_point_hit(p, ball_radius, q_outer, best);
 
         float aL = a_center - a_half;
         float aR = a_center + a_half;
@@ -129,8 +130,8 @@ namespace
         Vec2 qL = closest_point_on_segment(p, A0, A1);
         Vec2 qR = closest_point_on_segment(p, B0, B1);
 
-        try_point(qL);
-        try_point(qR);
+        try_point_hit(p, ball_radius, qL, best);
+        try_point_hit(p, ball_radius, qR, best);
 
         return best;
     }
@@ -156,16 +157,16 @@ namespace
 namespace physics
 {
     void sync_config_from_scene(Config& cfg,
-                                float outer_limit_r,
-                                float ball_radius,
-                                int paddle_count,
-                                float paddle_r_inner,
-                                float paddle_r_outer,
-                                float paddle_half_span,
-                                int brick_cols,
-                                int brick_rows,
-                                float brick_r_inner,
-                                float brick_r_outer)
+            float outer_limit_r,
+            float ball_radius,
+            int paddle_count,
+            float paddle_r_inner,
+            float paddle_r_outer,
+            float paddle_half_span,
+            int brick_cols,
+            int brick_rows,
+            float brick_r_inner,
+            float brick_r_outer)
     {
         cfg.outer_limit_r = outer_limit_r;
         cfg.ball_radius = ball_radius;
@@ -183,6 +184,7 @@ namespace physics
         cfg.brick_half_span = (float)(M_PI / (double)brick_cols);
 
         cfg.dt_substep = 0.005f;
+        cfg.max_resolve_iters = 3;
     }
 
     void place_ball_waiting(GameState& s, float spawn_r)
@@ -200,7 +202,7 @@ namespace physics
         s.ball_a = wrap_0_2pi(a);
     }
 
-    void launch_ball(GameState& s)
+    void launch_ball(GameState& s, const Config& cfg)
     {
         if (s.mode != GameMode::WaitingLaunch)
             return;
@@ -209,9 +211,14 @@ namespace physics
         s.ball_launched = true;
 
         Vec2 p{ s.ball_x, s.ball_y };
-        Vec2 dir = normalize(p);
+        Vec2 radial = normalize(p);
+        Vec2 tangent = perp(radial);
 
-        Vec2 v = mul(dir, s.ball_speed);
+        Vec2 v = mul(radial, s.ball_speed);
+        // If we want to launch the ball at an angle
+        // v = add(v, mul(tangent, cfg.launch_tangent * s.ball_speed));
+        enforce_speed(v, s.ball_speed);
+
         s.ball_vx = v.x;
         s.ball_vy = v.y;
     }
@@ -226,8 +233,8 @@ namespace physics
 
         p = add(p, mul(v, h));
 
-        float r = std::sqrt(p.x * p.x + p.y * p.y);
-        if (r + cfg.ball_radius > cfg.outer_limit_r)
+        float pr = std::sqrt(p.x * p.x + p.y * p.y);
+        if (pr + cfg.ball_radius > cfg.outer_limit_r)
         {
             s.mode = GameMode::GameOver;
             s.ball_launched = false;
@@ -236,43 +243,71 @@ namespace physics
             return;
         }
 
-        auto apply_hit = [&](const Hit& hit, bool add_paddle_influence)
+        auto apply_basic_hit = [&](const Hit& hit)
         {
             p = add(p, mul(hit.n, hit.pen + cfg.bounce_push));
             v = reflect(v, hit.n);
-
-            if (add_paddle_influence)
-            {
-                Vec2 radial = normalize(p);
-                Vec2 tangent = perp(radial);
-                float rc = std::sqrt(p.x * p.x + p.y * p.y);
-                float vt = s.paddle_omega * rc;
-                Vec2 vp = mul(tangent, vt);
-                v = add(v, mul(vp, cfg.paddle_influence));
-            }
-
             enforce_speed(v, s.ball_speed);
         };
 
-        for (int iter = 0; iter < 3; ++iter)
+        for (int iter = 0; iter < cfg.max_resolve_iters; ++iter)
         {
-            bool collided = false;
+            bool any = false;
 
             Hit bestP;
+            float bestCenter = 0.0f;
+
             for (int i = 0; i < cfg.paddle_count; ++i)
             {
                 float center = s.paddle_angle + (float)i * (float)(2.0 * M_PI / (double)cfg.paddle_count);
+
                 Hit hP = collide_annular_sector(p, cfg.ball_radius,
-                                                cfg.paddle_r_inner, cfg.paddle_r_outer,
-                                                center, cfg.paddle_half_span);
+                        cfg.paddle_r_inner, cfg.paddle_r_outer,
+                        center, cfg.paddle_half_span);
+
                 if (hP.hit && (!bestP.hit || hP.pen > bestP.pen))
+                {
                     bestP = hP;
+                    bestCenter = center;
+                }
             }
 
-            if (bestP.hit)
+            if (bestP.hit && s.hit_cooldown <= 0.0f)
             {
-                apply_hit(bestP, true);
-                collided = true;
+                p = add(p, mul(bestP.n, bestP.pen + cfg.bounce_push));
+
+                // only bounce if moving INTO the surface
+                float vn_in = dot(v, bestP.n);
+                if (vn_in < 0.0f)
+                    v = reflect(v, bestP.n);
+
+                Vec2 radial = normalize(p);
+                Vec2 tangent = perp(radial);
+
+                float a = wrap_0_2pi(std::atan2(p.y, p.x));
+                float off = angle_delta(a, bestCenter);
+                float t = clampf(off / cfg.paddle_half_span, -1.0f, 1.0f);
+
+                float rc = std::sqrt(p.x * p.x + p.y * p.y);
+                float vt = s.paddle_omega * rc;
+                Vec2 vp = mul(tangent, vt);
+
+                v = add(v, mul(vp, cfg.paddle_influence));
+                v = add(v, mul(tangent, cfg.paddle_aim * t * s.ball_speed));
+                v = add(v, mul(tangent, cfg.paddle_face_bias * s.ball_speed));
+
+                // force a minimum separating component
+                float vn_out = dot(v, bestP.n);
+                float vn_min = cfg.min_separating_speed * s.ball_speed;
+                if (vn_out < vn_min)
+                {
+                    v = add(v, mul(bestP.n, (vn_min - vn_out)));
+                }
+
+                enforce_speed(v, s.ball_speed);
+
+                s.hit_cooldown = cfg.paddle_hit_cooldown;
+                any = true;
             }
 
             float a = wrap_0_2pi(std::atan2(p.y, p.x));
@@ -290,14 +325,15 @@ namespace physics
             for (int ii = 0; ii < 3; ++ii)
             {
                 int c = candidates[ii];
-                int top = bricks.top_alive_row_in_column(c);
-                if (top < 0) continue;
 
-                const Brick& b = bricks.at(c, top);
+                int row = bricks.lowest_alive_row_in_column(c);
+                if (row < 0) continue;
+
+                const Brick& b = bricks.at(c, row);
 
                 Hit hB = collide_annular_sector(p, cfg.ball_radius,
-                                                cfg.brick_r_inner, cfg.brick_r_outer,
-                                                b.a_center, cfg.brick_half_span);
+                        cfg.brick_r_inner, cfg.brick_r_outer,
+                        b.a_center, cfg.brick_half_span);
 
                 if (hB.hit && (!bestB.hit || hB.pen > bestB.pen))
                 {
@@ -308,12 +344,14 @@ namespace physics
 
             if (bestB.hit && bestCol >= 0)
             {
-                int top = bricks.top_alive_row_in_column(bestCol);
-                if (top >= 0)
-                    bricks.at(bestCol, top).alive = false;
+                int row_hit = bricks.lowest_alive_row_in_column(bestCol);
+                if (row_hit >= 0)
+                {
+                    bricks.hit_and_collapse(bestCol, row_hit);
+                }
 
-                apply_hit(bestB, false);
-                collided = true;
+                apply_basic_hit(bestB);
+                any = true;
 
                 if (bricks.alive_count() == 0)
                 {
@@ -325,7 +363,7 @@ namespace physics
                 }
             }
 
-            if (!collided)
+            if (!any)
                 break;
         }
 
@@ -342,6 +380,9 @@ namespace physics
     {
         if (dt < 0.0f) dt = 0.0f;
         if (dt > 0.05f) dt = 0.05f;
+
+        if (s.mode == GameMode::Paused || s.mode == GameMode::GameOver || s.mode == GameMode::Win)
+            return;
 
         if (s.mode == GameMode::WaitingLaunch)
         {

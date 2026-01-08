@@ -686,7 +686,7 @@ void Application::on_key_pressed(int key, int scancode, int action, int mods)
     }
 
     if (g_input.pause_pressed) g_state.toggle_pause();
-    if (g_input.launch_pressed) physics::launch_ball(g_state);
+    if (g_input.launch_pressed) physics::launch_ball(g_state, g_phys);
     if (g_input.reset_pressed)
     {
         g_state.reset();
