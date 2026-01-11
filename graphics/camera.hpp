@@ -16,8 +16,11 @@ private:
     Frame frame;
     Mode mode;
 
-    float fovY;             // radians, for perspective
-    float orthoHalfHeight;  // half height of view volume for ortho
+    Frame savedPerspectiveFrame;
+    bool hasSavedPerspectiveFrame;
+
+    float fovY;
+    float orthoHalfHeight;
     float nearPlane;
     float farPlane;
 

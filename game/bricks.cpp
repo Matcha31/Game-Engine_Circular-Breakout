@@ -1,5 +1,13 @@
 #include "bricks.hpp"
 #include <cmath>
+#include <cstdio>
+
+static float clampf(float x, float lo, float hi)
+{
+    if (x < lo) return lo;
+    if (x > hi) return hi;
+    return x;
+}
 
 void BrickField::build_wall(int cols_count, int rows_count, float start_angle, float a_half_span)
 {
@@ -23,6 +31,9 @@ void BrickField::build_wall(int cols_count, int rows_count, float start_angle, f
             b.a_center = a;
             b.a_half_span = a_half_span;
             b.alive = true;
+
+            b.row_visual = (float)r;
+            b.row_target = r;
 
             bricks[(size_t)c * (size_t)rows + (size_t)r] = b;
         }
@@ -49,7 +60,7 @@ const Brick& BrickField::at(int col, int row) const
 
 int BrickField::top_alive_row_in_column(int col) const
 {
-    for (int r = rows - 1; r >= 0; --r)
+    for (int r = 0; r < rows; ++r)
     {
         if (at(col, r).alive)
             return r;
@@ -59,8 +70,12 @@ int BrickField::top_alive_row_in_column(int col) const
 
 int BrickField::lowest_alive_row_in_column(int col) const
 {
+//     for (int r = rows - 1; r >= 0; --r)
     for (int r = 0; r < rows; ++r)
-        if (at(col, r).alive) return r;
+    {
+        if (at(col, r).alive)
+            return r;
+    }
     return -1;
 }
 
@@ -74,10 +89,58 @@ bool BrickField::hit_and_collapse(int col, int row_hit)
 
     for (int r = row_hit; r < rows - 1; ++r)
     {
-        bool above = at(col, r + 1).alive;
-        at(col, r).alive = above;
+        const Brick& src = at(col, r + 1);
+        Brick& dst = at(col, r);
+
+        dst.alive = src.alive;
+
+        if (dst.alive)
+        {
+            dst.row_visual = (float)(r + 1);
+            dst.row_target = r;
+        }
+        else
+        {
+            dst.row_visual = (float)r;
+            dst.row_target = r;
+        }
     }
 
-    at(col, rows - 1).alive = false;
+    Brick& top = at(col, rows - 1);
+    top.alive = false;
+    top.row_visual = (float)(rows - 1);
+    top.row_target = rows - 1;
+
     return true;
+}
+
+void BrickField::update_fall(float dt, float rows_per_second)
+{
+    for (auto& b : bricks)
+    {
+        float diff = (float)b.row_target - b.row_visual;
+        if (b.alive && std::fabs(diff) > 1e-4f)
+        {
+            printf("MOVING col=%d row_target=%d row_visual=%f diff=%f\n",
+                    b.col, b.row_target, b.row_visual, diff);
+            break;
+        }
+    }
+
+    if (dt <= 0.0f) return;
+    if (rows_per_second <= 0.0f) rows_per_second = 1.0f;
+
+    float max_step = rows_per_second * dt;
+
+    for (auto& b : bricks)
+    {
+        float target = (float)b.row_target;
+        float diff = target - b.row_visual;
+
+        float step = clampf(diff, -max_step, +max_step);
+        b.row_visual += step;
+
+        if (std::fabs(b.row_visual - target) < 1e-3f)
+            b.row_visual = target;
+    }
 }

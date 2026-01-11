@@ -22,7 +22,7 @@ namespace physics
 
         float brick_half_span = 0.0f;
 
-        float bounce_push = 0.004f;
+        float bounce_push = 0.05f;
 
         float paddle_influence = 0.55f;
 

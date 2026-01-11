@@ -1,4 +1,5 @@
 #include "camera.hpp"
+#include <cmath>
 
 namespace
 {
@@ -9,7 +10,6 @@ namespace
         float A = (zFar + zNear) / (zNear - zFar);
         float B = (2.0f * zFar * zNear) / (zNear - zFar);
 
-        // Column-major
         return Mat4({
             f / aspect, 0.0f, 0.0f, 0.0f,
             0.0f,       f,    0.0f, 0.0f,
@@ -33,7 +33,6 @@ namespace
         float ty = -(top + bottom) * invTB;
         float tz = -(zFar + zNear) * invFN;
 
-        // Column-major
         return Mat4({
             a,    0.0f, 0.0f, 0.0f,
             0.0f, b,    0.0f, 0.0f,
@@ -44,22 +43,52 @@ namespace
 }
 
 Camera::Camera()
-    : frame(nullptr),
-      mode(Mode::Perspective),
-      fovY(45.0f * M_PI / 180.0f),
-      orthoHalfHeight(10.0f),
-      nearPlane(0.1f),
-      farPlane(100.0f),
-      viewportWidth(800),
-      viewportHeight(600)
+    : frame(nullptr)
+    , mode(Mode::Perspective)
+    , savedPerspectiveFrame(nullptr)
+    , hasSavedPerspectiveFrame(false)
+    , fovY(45.0f * (float)M_PI / 180.0f)
+    , orthoHalfHeight(2.5f)
+    , nearPlane(0.1f)
+    , farPlane(100.0f)
+    , viewportWidth(800)
+    , viewportHeight(600)
 {
-    // Default: put camera a bit above +Z looking toward origin.
     frame.position = Vec4(0.0f, 0.0f, 5.0f, 1.0f);
     frame.orientation = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void Camera::setMode(Mode m)
 {
+    if (m == mode)
+        return;
+
+    if (m == Mode::OrthoTop)
+    {
+        if (mode == Mode::Perspective)
+        {
+            savedPerspectiveFrame = frame;
+            hasSavedPerspectiveFrame = true;
+        }
+
+        const float topDistance = 25.0f;
+
+        frame.position = Vec4(0.0f, 0.0f, topDistance, 1.0f);
+        frame.orientation = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
+
+        mode = m;
+        return;
+    }
+
+    if (m == Mode::Perspective)
+    {
+        if (mode == Mode::OrthoTop && hasSavedPerspectiveFrame)
+            frame = savedPerspectiveFrame;
+
+        mode = m;
+        return;
+    }
+
     mode = m;
 }
 
@@ -70,7 +99,7 @@ Camera::Mode Camera::getMode() const
 
 void Camera::setViewportSize(int width, int height)
 {
-    viewportWidth = (width  > 0) ? width  : 1;
+    viewportWidth  = (width  > 0) ? width  : 1;
     viewportHeight = (height > 0) ? height : 1;
 }
 

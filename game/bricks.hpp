@@ -10,6 +10,9 @@ struct Brick
     float a_half_span = 0.10f;
 
     bool alive = true;
+
+    float row_visual = 0.0f;
+    int row_target = 0;
 };
 
 struct BrickField
@@ -27,6 +30,10 @@ struct BrickField
     const Brick& at(int col, int row) const;
 
     int top_alive_row_in_column(int col) const;
+
     int lowest_alive_row_in_column(int col) const;
+
     bool hit_and_collapse(int col, int row_hit);
+
+    void update_fall(float dt, float rows_per_second = 12.0f);
 };

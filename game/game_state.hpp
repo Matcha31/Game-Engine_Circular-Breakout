@@ -28,7 +28,7 @@ struct GameState
     float ball_vx = 0.0f;
     float ball_vy = 0.0f;
 
-    float ball_speed = 0.8f;
+    float ball_speed = 1.0f;
     bool ball_launched = false;
 
     float ball_radial_speed = 0.0f;

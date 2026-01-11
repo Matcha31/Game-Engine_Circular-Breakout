@@ -215,8 +215,6 @@ namespace physics
         Vec2 tangent = perp(radial);
 
         Vec2 v = mul(radial, s.ball_speed);
-        // If we want to launch the ball at an angle
-        // v = add(v, mul(tangent, cfg.launch_tangent * s.ball_speed));
         enforce_speed(v, s.ball_speed);
 
         s.ball_vx = v.x;
@@ -276,7 +274,6 @@ namespace physics
             {
                 p = add(p, mul(bestP.n, bestP.pen + cfg.bounce_push));
 
-                // only bounce if moving INTO the surface
                 float vn_in = dot(v, bestP.n);
                 if (vn_in < 0.0f)
                     v = reflect(v, bestP.n);
@@ -296,7 +293,7 @@ namespace physics
                 v = add(v, mul(tangent, cfg.paddle_aim * t * s.ball_speed));
                 v = add(v, mul(tangent, cfg.paddle_face_bias * s.ball_speed));
 
-                // force a minimum separating component
+                // minimum separating component
                 float vn_out = dot(v, bestP.n);
                 float vn_min = cfg.min_separating_speed * s.ball_speed;
                 if (vn_out < vn_min)
@@ -345,10 +342,7 @@ namespace physics
             if (bestB.hit && bestCol >= 0)
             {
                 int row_hit = bricks.lowest_alive_row_in_column(bestCol);
-                if (row_hit >= 0)
-                {
-                    bricks.hit_and_collapse(bestCol, row_hit);
-                }
+                bricks.hit_and_collapse(bestCol, row_hit);
 
                 apply_basic_hit(bestB);
                 any = true;

@@ -509,6 +509,7 @@ void Application::update(float delta)
 
     g_state.update(delta);
     physics::step(g_state, g_bricks, g_phys, delta);
+    g_bricks.update_fall(delta, 14.0f);
 
     g_input.begin_frame();
 }
@@ -586,12 +587,13 @@ void Application::render()
 
             Mat4 model = rotationZ(b.a_center);
 
-            float z = S.brick_z0 + (float)b.row * (S.brick_height + S.brick_row_gap_z);
+            float z = S.brick_z0 + (float)b.row_visual * (S.brick_height + S.brick_row_gap_z);
             model(2, 3) = z;
 
             setMat4(lit_u_model, model);
 
-            bool alt = ((b.col + b.row) & 1) != 0;
+            // bool alt = ((b.col + b.row) & 1) != 0;
+            bool alt = ((b.col + b.row_target) & 1) != 0;
             if (alt) brick_mesh_b.draw();
             else     brick_mesh_a.draw();
         }
