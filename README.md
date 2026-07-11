@@ -1,63 +1,72 @@
-# PA199 - project (game engine and breakout game)
+# Circular Breakout — PA199 Project
 
-An implementation of a small game engine and
-a breakout game using the engine.
+This project is a circular variant of the classic *Breakout* game, developed as part of the **PA199 Computer Graphics** course.
 
-## NOTES FOR DEVELOPERS
+The game takes place in a circular arena with curved paddles and a vertical wall of bricks.
+The goal is to destroy all bricks by bouncing the ball using the paddles, without letting the ball escape the outer boundary.
 
-This file is located in the root folder under which
-you are supposed to implement your entire project.
-The content of the folder (and sub-folders) is completely
-under your control. But in CMakeLists.txt files there are
-few lines which should not be modified. They are clearly
-identified by comments.
+---
 
-The initial project implementation (once you unzip the
-project's template) provides you a quick tutorial for
-adding more files and libraries to the project. The
-tutorial consists of the file:
+## Gameplay Overview
 
-    ./some_game_file.cpp 
-    
-and a library:
+* A circular wall of bricks stands at the center of the arena.
+* Bricks are stacked vertically in columns.
+* A column only opens once all bricks in that column are destroyed.
+* The game ends when:
 
-    some_my_library
-    
-in the sub-folder ./some_my_library_dir. In the
-./CMakeLists.txt file you can see, how a new module
-can be added to the project.
+  * **All bricks are destroyed** → Win
+  * **The ball reaches the outer boundary** → Game Over
 
-We also provide tutorial for making unit tests of
-library functions. They are in a tutorial file:
+The physics simulation handles curved collisions for both paddles and bricks.
 
-    ./test/some_test.cpp
+---
 
-We also included a tutorial for loading shaders
-and textures from the disk. It is in file:
+## Controls
 
-    ./application.cpp
+### Game control
 
-All tutorial files and libraries are completelly
-artificial. So feel free to remove them any time
-you want.
+* **Space** — Launch the ball
+* **R** — Reset the game
+* **P** — Pause / unpause the game
+* **Left Shift** — Slow motion (hold or toggle, depending on configuration)
 
-Once you project in ready for submition to IS, then
-build the targets:
+### Paddle control
 
-    PA199_project.exe (Install)
-    PA199_project_tests.exe (Install)
+* **Left Arrow** — Rotate paddles counterclockwise
+* **Right Arrow** — Rotate paddles clockwise
 
-There will be created a "dist" folder right under
-the project's root folder containing all data and
-binaries to run the project.
+### Camera control
 
-## GAME CONTROLS
+* **1** — Perspective camera
+* **2** — Top-down camera
 
-| Key         | Description |
-| :---        | :----       |
-| Left Arrow  | Rotate paddles in CW direction. |
-| Right Arrow | Rotate paddles in CCW direction. |
-| Space       | Launch the ball at the game begin. |
-| P           | Toggle game pause. |
-| 1           | Switch to perspective camera (look from side). |
-| 2           | Switch to orthographics camera (look from top down). |
+---
+
+## Visual & Gameplay Features
+
+* Curved paddle collision with angle-dependent bounce
+* Curved brick collision using annular sector geometry
+* Brick collapse with falling animation
+* Camera shake on brick impact (visual feedback)
+* Optional slow-motion mode for debugging or gameplay control
+* Multiple paddles placed evenly around the arena
+
+---
+
+## Build & Run
+
+The project uses the provided PA199 framework and OpenGL setup.
+
+Typical workflow (on Linux in terminal):
+
+```bash
+mkdir build
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+cd build/
+ninja
+./courses/PA199/project/PA199_project
+```
+
+---

@@ -76,3 +76,17 @@ Vec4 Mat4::operator*(const Vec4& v) const {
         m[3] * v.x + m[7] * v.y + m[11] * v.z + m[15] * v.w
     );
 }
+
+Mat4 Mat4::translation(float tx, float ty, float tz)
+{
+    Mat4 t = Mat4::identity();
+    t(0, 3) = tx;
+    t(1, 3) = ty;
+    t(2, 3) = tz;
+    return t;
+}
+
+Mat4 Mat4::translation(const Vec4& v)
+{
+    return Mat4::translation(v.x, v.y, v.z);
+}

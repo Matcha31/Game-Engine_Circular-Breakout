@@ -9,6 +9,7 @@ namespace physics
     {
         float ball_radius = 0.04f;
         float outer_limit_r = 2.45f;
+        float launch_angle = 0.30f;
 
         int paddle_count = 3;
         float paddle_r_inner = 2.00f;
@@ -19,23 +20,14 @@ namespace physics
         int brick_rows = 4;
         float brick_r_inner = 0.60f;
         float brick_r_outer = 0.80f;
-
         float brick_half_span = 0.0f;
 
-        float bounce_push = 0.05f;
+        float paddle_friction = 0.50f;
 
-        float paddle_influence = 0.55f;
-
-        float paddle_aim = 0.90f;
-        float paddle_face_bias = 0.15f;
-
-        float paddle_hit_cooldown = 0.02f;
-        float min_separating_speed = 0.20f;
-
-        float launch_tangent = 0.20f;
+        // Small positional correction after an overlap
+        float separation_epsilon = 1e-4f;
 
         float dt_substep = 0.005f;
-
         int max_resolve_iters = 3;
     };
 
@@ -52,8 +44,6 @@ namespace physics
             float brick_r_outer);
 
     void place_ball_waiting(GameState& s, float spawn_r);
-
     void launch_ball(GameState& s, const Config& cfg);
-
     void step(GameState& s, BrickField& bricks, const Config& cfg, float dt);
 }

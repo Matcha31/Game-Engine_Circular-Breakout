@@ -7,6 +7,7 @@ add_library(game
     "bricks.cpp"
     "physics.hpp"
     "physics.cpp"
+    "camera_shake.hpp"
     )
 
 # (optional) Search and ling with 3rd party libraries

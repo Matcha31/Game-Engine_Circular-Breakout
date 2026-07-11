@@ -3,6 +3,8 @@
 
 namespace
 {
+    constexpr float PI = 3.14159265358979323846f;
+
     Mat4 makePerspective(float fovY, float aspect, float zNear, float zFar)
     {
         float f = 1.0f / std::tan(fovY * 0.5f);
@@ -40,22 +42,95 @@ namespace
             tx,   ty,   tz,   1.0f
         });
     }
+
+    float maxf(float a, float b)
+    {
+        return (a > b) ? a : b;
+    }
+
+    float minf(float a, float b)
+    {
+        return (a < b) ? a : b;
+    }
 }
 
 Camera::Camera()
     : frame(nullptr)
     , mode(Mode::Perspective)
-    , savedPerspectiveFrame(nullptr)
-    , hasSavedPerspectiveFrame(false)
-    , fovY(45.0f * (float)M_PI / 180.0f)
-    , orthoHalfHeight(2.5f)
+    , fovY(45.0f * PI / 180.0f)
+    , orthoHalfHeight(2.8f)
     , nearPlane(0.1f)
     , farPlane(100.0f)
     , viewportWidth(800)
     , viewportHeight(600)
+    , sceneRadius(2.8f)
 {
-    frame.position = Vec4(0.0f, 0.0f, 5.0f, 1.0f);
-    frame.orientation = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
+    updateFrameForMode();
+}
+
+float Camera::aspectRatio() const
+{
+    return static_cast<float>(viewportWidth) /
+           static_cast<float>(viewportHeight);
+}
+
+float Camera::fittedOrthoHalfHeight() const
+{
+    const float margin = 1.10f;
+    const float aspect = aspectRatio();
+
+    // Orthographic projection uses halfW = halfH * aspect.
+    // In a narrow window, halfH must grow so halfW still covers the arena.
+    if (aspect < 1.0f)
+        return margin * sceneRadius / aspect;
+
+    return margin * sceneRadius;
+}
+
+float Camera::fittedPerspectiveDistance() const
+{
+    const float margin = 1.15f;
+    const float aspect = aspectRatio();
+
+    const float verticalFov = fovY;
+    const float horizontalFov = 2.0f * std::atan(std::tan(fovY * 0.5f) * aspect);
+    const float limitingFov = minf(verticalFov, horizontalFov);
+
+    // Fit a bounding sphere around the play area. This is conservative and
+    // independent from the 45 degree pitch.
+    return (margin * sceneRadius) / std::sin(limitingFov * 0.5f);
+}
+
+void Camera::updateFrameForMode()
+{
+    if (mode == Mode::OrthoTop)
+    {
+        // With your Frame implementation, identity orientation means that
+        // camera local -Z points along world -Z. From z > 0, this is top-down.
+        const float topDistance = 25.0f;
+
+        frame.position = Vec4(0.0f, 0.0f, topDistance, 1.0f);
+        frame.orientation = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
+        orthoHalfHeight = fittedOrthoHalfHeight();
+        return;
+    }
+
+    // Perspective view: camera looks at the origin from the -Y/+Z side.
+    // The +X rotation pitches camera local -Z toward +Y and -Z in world space.
+    const float pitch = 45.0f * PI / 180.0f;
+    const float distance = fittedPerspectiveDistance();
+
+    frame.position = Vec4(
+            0.0f,
+            -distance * std::sin(pitch),
+             distance * std::cos(pitch),
+            1.0f);
+
+    frame.orientation = Quaternion(
+            std::sin(pitch * 0.5f),
+            0.0f,
+            0.0f,
+            std::cos(pitch * 0.5f)).normalized();
 }
 
 void Camera::setMode(Mode m)
@@ -63,33 +138,8 @@ void Camera::setMode(Mode m)
     if (m == mode)
         return;
 
-    if (m == Mode::OrthoTop)
-    {
-        if (mode == Mode::Perspective)
-        {
-            savedPerspectiveFrame = frame;
-            hasSavedPerspectiveFrame = true;
-        }
-
-        const float topDistance = 25.0f;
-
-        frame.position = Vec4(0.0f, 0.0f, topDistance, 1.0f);
-        frame.orientation = Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
-
-        mode = m;
-        return;
-    }
-
-    if (m == Mode::Perspective)
-    {
-        if (mode == Mode::OrthoTop && hasSavedPerspectiveFrame)
-            frame = savedPerspectiveFrame;
-
-        mode = m;
-        return;
-    }
-
     mode = m;
+    updateFrameForMode();
 }
 
 Camera::Mode Camera::getMode() const
@@ -101,6 +151,14 @@ void Camera::setViewportSize(int width, int height)
 {
     viewportWidth  = (width  > 0) ? width  : 1;
     viewportHeight = (height > 0) ? height : 1;
+
+    updateFrameForMode();
+}
+
+void Camera::setSceneRadius(float radius)
+{
+    sceneRadius = maxf(radius, 0.1f);
+    updateFrameForMode();
 }
 
 void Camera::setPerspective(float fovYRadians, float nearP, float farP)
@@ -108,13 +166,18 @@ void Camera::setPerspective(float fovYRadians, float nearP, float farP)
     fovY = fovYRadians;
     nearPlane = nearP;
     farPlane = farP;
+
+    updateFrameForMode();
 }
 
 void Camera::setOrtho(float halfHeight, float nearP, float farP)
 {
-    orthoHalfHeight = halfHeight;
+    sceneRadius = maxf(halfHeight, 0.1f);
+    orthoHalfHeight = fittedOrthoHalfHeight();
     nearPlane = nearP;
     farPlane = farP;
+
+    updateFrameForMode();
 }
 
 Mat4 Camera::viewMatrix() const
@@ -124,23 +187,15 @@ Mat4 Camera::viewMatrix() const
 
 Mat4 Camera::projectionMatrix() const
 {
-    float aspect = static_cast<float>(viewportWidth) /
-                   static_cast<float>(viewportHeight);
+    const float aspect = aspectRatio();
 
     if (mode == Mode::Perspective)
     {
         return makePerspective(fovY, aspect, nearPlane, farPlane);
     }
-    else
-    {
-        float halfH = orthoHalfHeight;
-        float halfW = halfH * aspect;
 
-        float left   = -halfW;
-        float right  =  halfW;
-        float bottom = -halfH;
-        float top    =  halfH;
+    const float halfH = orthoHalfHeight;
+    const float halfW = halfH * aspect;
 
-        return makeOrtho(left, right, bottom, top, nearPlane, farPlane);
-    }
+    return makeOrtho(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
 }

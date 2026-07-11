@@ -13,6 +13,7 @@
 #include "math/mat4.hpp"
 #include "math/vec4.hpp"
 
+#include "game/camera_shake.hpp"
 #include "game/game_state.hpp"
 #include "game/input.hpp"
 #include "game/bricks.hpp"
@@ -316,6 +317,9 @@ namespace
     }
 }
 
+static int prev_paddle_hits = 0;
+static int prev_brick_hits = 0;
+
 static GameState g_state;
 static InputState g_input;
 static BrickField g_bricks;
@@ -374,6 +378,7 @@ Application::Application(int initial_width, int initial_height, std::vector<std:
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     camera.setViewportSize(width, height);
+    camera.setSceneRadius(S.outer_limit_r + 0.35f);
 
     axis_vertex_shader = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "axis.vert", GL_VERTEX_SHADER);
     axis_fragment_shader = gfx::compile_shader(lecture_folder_path / "data" / "shaders" / "axis.frag", GL_FRAGMENT_SHADER);
@@ -504,12 +509,27 @@ Application::~Application()
 
 void Application::update(float delta)
 {
+    global_time += delta;
+    shake.update(delta);
+
     g_state.left_down = g_input.left_down;
     g_state.right_down = g_input.right_down;
 
     g_state.update(delta);
     physics::step(g_state, g_bricks, g_phys, delta);
     g_bricks.update_fall(delta, 14.0f);
+
+    // if (g_state.hit_paddle_count != prev_paddle_hits)
+    // {
+    //     prev_paddle_hits = g_state.hit_paddle_count;
+    //     shake.trigger(0.02f, 0.08f);
+    // }
+
+    if (g_state.hit_brick_count != prev_brick_hits)
+    {
+        prev_brick_hits = g_state.hit_brick_count;
+        shake.trigger(0.03f, 0.10f);
+    }
 
     g_input.begin_frame();
 }
@@ -518,8 +538,14 @@ void Application::render()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    float ox, oy;
+    shake.offset(global_time, ox, oy);
+
     Mat4 view = camera.viewMatrix();
     Mat4 proj = camera.projectionMatrix();
+
+    Mat4 shakeT = Mat4::translation(ox, oy, 0.0f);
+    view = shakeT * view;
 
     Vec4 camPos = camera.getFrame().position;
     Vec4 lightDir = normalize3(Vec4(1.0f, 1.0f, 2.0f, 0.0f));
@@ -546,6 +572,8 @@ void Application::render()
     }
 
     glUseProgram(lit_program);
+
+
 
     setMat4(lit_u_view, view);
     setMat4(lit_u_proj, proj);
@@ -667,8 +695,6 @@ void Application::on_resize(int w, int h)
     IApplication::on_resize(w, h);
     glViewport(0, 0, w, h);
     camera.setViewportSize(w, h);
-    camera.getFrame().position = Vec4(0.0f, -3.0f, 2.6f, 1.0f);
-    camera.getFrame().orientation = Quaternion(0.35f, 0.0f, 0.0f, 0.94f).normalized();
 }
 
 void Application::on_mouse_move(double x, double y) { (void)x; (void)y; }
@@ -685,6 +711,12 @@ void Application::on_key_pressed(int key, int scancode, int action, int mods)
     {
         if (key == GLFW_KEY_1) camera.setMode(Camera::Mode::Perspective);
         if (key == GLFW_KEY_2) camera.setMode(Camera::Mode::OrthoTop);
+    }
+
+    if (key == GLFW_KEY_LEFT_SHIFT || key == GLFW_KEY_RIGHT_SHIFT)
+    {
+        if (action == GLFW_PRESS) g_state.speed_mul = 0.25f;
+        if (action == GLFW_RELEASE) g_state.speed_mul = 1.0f;
     }
 
     if (g_input.pause_pressed) g_state.toggle_pause();

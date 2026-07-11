@@ -16,9 +16,6 @@ private:
     Frame frame;
     Mode mode;
 
-    Frame savedPerspectiveFrame;
-    bool hasSavedPerspectiveFrame;
-
     float fovY;
     float orthoHalfHeight;
     float nearPlane;
@@ -26,6 +23,13 @@ private:
 
     int viewportWidth;
     int viewportHeight;
+
+    float sceneRadius;
+
+    float aspectRatio() const;
+    float fittedOrthoHalfHeight() const;
+    float fittedPerspectiveDistance() const;
+    void updateFrameForMode();
 
 public:
     Camera();
@@ -37,6 +41,7 @@ public:
     Mode getMode() const;
 
     void setViewportSize(int width, int height);
+    void setSceneRadius(float radius);
 
     void setPerspective(float fovYRadians, float nearP, float farP);
     void setOrtho(float halfHeight, float nearP, float farP);

@@ -4,6 +4,7 @@
 
 #include "graphics/camera.hpp"
 #include "graphics/mesh.hpp"
+#include "game/camera_shake.hpp"
 
 class Application : public IApplication {
     private:
@@ -38,6 +39,10 @@ class Application : public IApplication {
         GLint lit_u_ambient;
         GLint lit_u_specular;
         GLint lit_u_shininess;
+
+        CameraShake shake;
+        float global_time = 0.0f;
+
 
     public:
         Application(int initial_width, int initial_height, std::vector<std::string> arguments = {});

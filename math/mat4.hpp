@@ -20,4 +20,7 @@ public:
 
     float& operator()(int row, int col);
     float  operator()(int row, int col) const;
+
+    static Mat4 translation(float tx, float ty, float tz);
+    static Mat4 translation(const Vec4& t);
 };

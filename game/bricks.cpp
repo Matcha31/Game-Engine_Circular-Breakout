@@ -116,17 +116,6 @@ bool BrickField::hit_and_collapse(int col, int row_hit)
 
 void BrickField::update_fall(float dt, float rows_per_second)
 {
-    for (auto& b : bricks)
-    {
-        float diff = (float)b.row_target - b.row_visual;
-        if (b.alive && std::fabs(diff) > 1e-4f)
-        {
-            printf("MOVING col=%d row_target=%d row_visual=%f diff=%f\n",
-                    b.col, b.row_target, b.row_visual, diff);
-            break;
-        }
-    }
-
     if (dt <= 0.0f) return;
     if (rows_per_second <= 0.0f) rows_per_second = 1.0f;
 

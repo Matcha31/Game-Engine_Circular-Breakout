@@ -18,26 +18,28 @@ struct GameState
 
     float paddle_angle = 0.0f;
     float paddle_speed = 0.8f;
+    float paddle_omega = 0.0f;
 
     float ball_r = 0.35f;
     float ball_a = 0.0f;
-
     float ball_x = 0.0f;
     float ball_y = 0.0f;
-
     float ball_vx = 0.0f;
     float ball_vy = 0.0f;
 
-    float ball_speed = 1.0f;
+    // Slower than the previous 1.0f so the collision behaviour can be tested
+    // and the level is realistically winnable.
+    float ball_speed = 0.45f;
     bool ball_launched = false;
 
     float ball_radial_speed = 0.0f;
     float ball_angular_speed = 0.0f;
-
     float outer_limit_r = 2.2f;
 
-    float paddle_omega = 0.0f;
-    float hit_cooldown = 0.0f;
+    int hit_paddle_count = 0;
+    int hit_brick_count = 0;
+
+    float speed_mul = 1.0f;
 
     void reset();
     void launch();
