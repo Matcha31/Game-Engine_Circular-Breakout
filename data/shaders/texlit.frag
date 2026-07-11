@@ -22,7 +22,7 @@ void main()
     vec3 base = baseTex * vColor;
 
     vec3 N = normalize(vWorldNormal);
-    vec3 L = normalize(-uLightDir);
+    vec3 L = normalize(uLightDir);
     vec3 V = normalize(uCameraPos - vWorldPos);
     vec3 R = reflect(-L, N);
 
