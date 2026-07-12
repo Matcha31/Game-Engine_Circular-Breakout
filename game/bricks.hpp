@@ -11,8 +11,14 @@ struct Brick
 
     bool alive = true;
 
+    // Current displayed row. It can be fractional while the brick is falling.
     float row_visual = 0.0f;
+
+    // Integer row where the brick must end after the collapse.
     int row_target = 0;
+
+    // Stable colour/style identity. It moves with the physical brick.
+    int color_variant = 0;
 };
 
 struct BrickField
@@ -30,10 +36,11 @@ struct BrickField
     const Brick& at(int col, int row) const;
 
     int top_alive_row_in_column(int col) const;
+    int bottom_collision_row_in_column(int col, float settle_tolerance = 1e-3f) const;
 
     int lowest_alive_row_in_column(int col) const;
 
     bool hit_and_collapse(int col, int row_hit);
 
-    void update_fall(float dt, float rows_per_second = 12.0f);
+    void update_fall(float dt, float rows_per_second = 3.0f);
 };

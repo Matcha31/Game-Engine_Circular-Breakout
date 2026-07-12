@@ -27,7 +27,7 @@ namespace
         return {a.x / l, a.y / l};
     }
 
-    // Counter-clockwise tangent
+    // Counter-clockwise tangent.
     static Vec2 perp(Vec2 a) { return {-a.y, a.x}; }
 
     static float clampf(float x, float lo, float hi)
@@ -70,7 +70,9 @@ namespace
         if (denominator <= 1e-12f)
             return a;
 
-        const float t = clampf(dot(sub(p, a), ab) / denominator, 0.0f, 1.0f);
+        const float t =
+            clampf(dot(sub(p, a), ab) / denominator, 0.0f, 1.0f);
+
         return add(a, mul(ab, t));
     }
 
@@ -81,96 +83,225 @@ namespace
             v = mul(v, speed / l);
     }
 
+    static Vec2 limit_length(Vec2 v, float maximum_length)
+    {
+        const float l = len(v);
+        if (l <= maximum_length || l <= 1e-8f)
+            return v;
+
+        return mul(v, maximum_length / l);
+    }
+
+    static void enforce_relative_separation(Vec2& ball_velocity,
+            Vec2 normal,
+            Vec2 surface_velocity,
+            float fixed_ball_speed,
+            float minimum_relative_speed_ratio)
+    {
+        const float minimum_relative_speed =
+            std::max(minimum_relative_speed_ratio, 0.0f)
+            * fixed_ball_speed;
+
+        const float current_relative_speed = dot(
+                sub(ball_velocity, surface_velocity),
+                normal);
+
+        if (current_relative_speed >= minimum_relative_speed)
+            return;
+
+        const float surface_normal_speed =
+            dot(surface_velocity, normal);
+
+        const float target_normal_speed = clampf(
+                surface_normal_speed + minimum_relative_speed,
+                -0.98f * fixed_ball_speed,
+                0.98f * fixed_ball_speed);
+
+        const Vec2 tangent = perp(normal);
+        const float old_tangent_speed =
+            dot(ball_velocity, tangent);
+
+        const float target_tangent_magnitude = std::sqrt(std::max(
+                0.0f,
+                fixed_ball_speed * fixed_ball_speed
+                    - target_normal_speed * target_normal_speed));
+
+        const float tangent_sign =
+            old_tangent_speed < 0.0f ? -1.0f : 1.0f;
+
+        ball_velocity = add(
+                mul(normal, target_normal_speed),
+                mul(tangent,
+                    tangent_sign * target_tangent_magnitude));
+    }
+
+    enum class ContactFeature
+    {
+        InnerArc,
+        OuterArc,
+        LeftSide,
+        RightSide
+    };
+
     struct Hit
     {
         bool hit = false;
         Vec2 normal{0.0f, 0.0f};
+
+        Vec2 closest_point{0.0f, 0.0f};
+
         float penetration = 0.0f;
+        ContactFeature feature = ContactFeature::InnerArc;
     };
 
-    static void try_point_hit(Vec2 p, float ball_radius, Vec2 closest_point, Hit& best)
+    static Hit collide_annular_sector(Vec2 p,
+            float ball_radius,
+            float r_inner,
+            float r_outer,
+            float angle_center,
+            float angle_half_span)
     {
-        const Vec2 difference = sub(p, closest_point);
-        const float distance_squared = len2(difference);
-        const float radius_squared = ball_radius * ball_radius;
+        Hit result;
 
-        if (distance_squared >= radius_squared)
-            return;
+        const float radius = len(p);
+        if (radius <= 1e-8f)
+            return result;
 
-        const float distance = std::sqrt(distance_squared);
-        const float penetration = ball_radius - distance;
-        const Vec2 normal = distance > 1e-8f
-            ? mul(difference, 1.0f / distance)
-            : normalize(p);
-
-        // The closest boundary point gives the largest penetration value.
-        if (!best.hit || penetration > best.penetration)
+        if (radius + ball_radius < r_inner
+                || radius - ball_radius > r_outer)
         {
-            best.hit = true;
-            best.normal = normal;
-            best.penetration = penetration;
+            return result;
         }
-    }
 
-    static Hit collide_annular_sector(Vec2 p, float ball_radius,
-            float r_inner, float r_outer,
-            float angle_center, float angle_half_span)
-    {
-        Hit best;
-
+        const Vec2 radial = mul(p, 1.0f / radius);
         const float ball_angle = std::atan2(p.y, p.x);
         const float offset = angle_delta(ball_angle, angle_center);
-        const float clamped_offset = clampf(offset, -angle_half_span, angle_half_span);
-        const float clamped_angle = angle_center + clamped_offset;
 
-        try_point_hit(p, ball_radius,
-                point_on_circle(r_inner, clamped_angle), best);
-        try_point_hit(p, ball_radius,
-                point_on_circle(r_outer, clamped_angle), best);
+        if (std::fabs(offset) <= angle_half_span)
+        {
+            const float middle_radius = 0.5f * (r_inner + r_outer);
 
-        const float left_angle = angle_center - angle_half_span;
-        const float right_angle = angle_center + angle_half_span;
+            if (radius < middle_radius)
+            {
+                result.normal = mul(radial, -1.0f);
+                result.closest_point = mul(radial, r_inner);
+                result.feature = ContactFeature::InnerArc;
 
-        const Vec2 left_inner = point_on_circle(r_inner, left_angle);
-        const Vec2 left_outer = point_on_circle(r_outer, left_angle);
-        const Vec2 right_inner = point_on_circle(r_inner, right_angle);
-        const Vec2 right_outer = point_on_circle(r_outer, right_angle);
+                if (radius < r_inner)
+                {
+                    const float distance = r_inner - radius;
+                    if (distance >= ball_radius)
+                        return Hit{};
 
-        try_point_hit(p, ball_radius,
-                closest_point_on_segment(p, left_inner, left_outer), best);
-        try_point_hit(p, ball_radius,
-                closest_point_on_segment(p, right_inner, right_outer), best);
+                    result.penetration = ball_radius - distance;
+                }
+                else
+                {
+                    result.penetration =
+                        ball_radius + (radius - r_inner);
+                }
+            }
+            else
+            {
+                result.normal = radial;
+                result.closest_point = mul(radial, r_outer);
+                result.feature = ContactFeature::OuterArc;
 
-        return best;
+                if (radius > r_outer)
+                {
+                    const float distance = radius - r_outer;
+                    if (distance >= ball_radius)
+                        return Hit{};
+
+                    result.penetration = ball_radius - distance;
+                }
+                else
+                {
+                    result.penetration =
+                        ball_radius + (r_outer - radius);
+                }
+            }
+
+            result.hit = result.penetration > 0.0f;
+            return result;
+        }
+
+        const bool right_side = offset > 0.0f;
+        const float side_angle = angle_center
+            + (right_side ? angle_half_span : -angle_half_span);
+
+        const Vec2 side_inner = point_on_circle(r_inner, side_angle);
+        const Vec2 side_outer = point_on_circle(r_outer, side_angle);
+        const Vec2 closest =
+            closest_point_on_segment(p, side_inner, side_outer);
+
+        const Vec2 difference = sub(p, closest);
+        const float distance_squared = len2(difference);
+
+        if (distance_squared >= ball_radius * ball_radius)
+            return result;
+
+        const float distance = std::sqrt(distance_squared);
+
+        if (distance > 1e-8f)
+        {
+            result.normal = mul(difference, 1.0f / distance);
+        }
+        else
+        {
+            const Vec2 side_radial =
+                {std::cos(side_angle), std::sin(side_angle)};
+            const Vec2 side_tangent = perp(side_radial);
+            result.normal =
+                right_side ? side_tangent : mul(side_tangent, -1.0f);
+        }
+
+        result.hit = true;
+        result.closest_point = closest;
+        result.penetration = ball_radius - distance;
+        result.feature = right_side
+            ? ContactFeature::RightSide
+            : ContactFeature::LeftSide;
+
+        return result;
     }
 
-    // The response is applied only while the ball approaches the surface.
     static bool apply_collision_response(Vec2& ball_velocity,
             Vec2 normal,
             Vec2 surface_velocity,
             float friction,
             float fixed_ball_speed)
     {
-        const Vec2 relative_velocity = sub(ball_velocity, surface_velocity);
-        const float relative_normal_speed = dot(normal, relative_velocity);
+        const Vec2 relative_velocity =
+            sub(ball_velocity, surface_velocity);
+
+        const float relative_normal_speed =
+            dot(normal, relative_velocity);
 
         if (relative_normal_speed >= 0.0f)
             return false;
 
-        const Vec2 normal_component = mul(normal, relative_normal_speed);
-        const Vec2 normal_velocity_change = mul(normal_component, -2.0f);
+        const Vec2 normal_component =
+            mul(normal, relative_normal_speed);
+
+        const Vec2 normal_velocity_change =
+            mul(normal_component, -2.0f);
 
         Vec2 tangential_velocity_change{0.0f, 0.0f};
 
         if (len2(surface_velocity) > 1e-12f)
         {
-            const Vec2 tangential_component = sub(relative_velocity, normal_component);
-            const float tangential_length = len(tangential_component);
+            const Vec2 tangential_component =
+                sub(relative_velocity, normal_component);
+
+            const float tangential_length =
+                len(tangential_component);
 
             if (tangential_length > 1e-8f)
             {
                 const float correction = std::min(
-                        friction * len(normal_component),
+                        clampf(friction, 0.0f, 1.0f)
+                            * len(normal_component),
                         tangential_length);
 
                 tangential_velocity_change = mul(
@@ -181,9 +312,9 @@ namespace
 
         Vec2 result = add(
                 ball_velocity,
-                add(normal_velocity_change, tangential_velocity_change));
+                add(normal_velocity_change,
+                    tangential_velocity_change));
 
-        // Fixed ball speed
         if (len2(result) <= 1e-12f)
             result = add(ball_velocity, normal_velocity_change);
 
@@ -192,9 +323,14 @@ namespace
         return true;
     }
 
-    static void separate_ball(Vec2& p, const Hit& hit, float epsilon)
+    static void separate_ball(Vec2& p,
+            const Hit& hit,
+            float epsilon)
     {
-        p = add(p, mul(hit.normal, hit.penetration + epsilon));
+        p = add(
+                p,
+                mul(hit.normal,
+                    hit.penetration + std::max(epsilon, 0.0f)));
     }
 
     static int angle_to_col(float a, int columns)
@@ -202,7 +338,9 @@ namespace
         const float two_pi = static_cast<float>(2.0 * M_PI);
         a = wrap_0_2pi(a);
 
-        int column = static_cast<int>(std::floor((a / two_pi) * columns));
+        int column =
+            static_cast<int>(std::floor((a / two_pi) * columns));
+
         column = std::max(0, std::min(column, columns - 1));
         return column;
     }
@@ -242,10 +380,11 @@ namespace physics
         cfg.brick_rows = brick_rows;
         cfg.brick_r_inner = brick_r_inner;
         cfg.brick_r_outer = brick_r_outer;
-        cfg.brick_half_span = static_cast<float>(M_PI / brick_cols);
+        cfg.brick_half_span =
+            static_cast<float>(M_PI / brick_cols);
 
         cfg.dt_substep = 0.005f;
-        cfg.max_resolve_iters = 3;
+        cfg.max_resolve_iters = 4;
     }
 
     void place_ball_waiting(GameState& s, float spawn_r)
@@ -286,7 +425,8 @@ namespace physics
     static void resolve_one_step(GameState& s,
             BrickField& bricks,
             const Config& cfg,
-            float h)
+            float h,
+            float paddle_angle)
     {
         if (s.mode != GameMode::Playing || !s.ball_launched)
             return;
@@ -297,7 +437,8 @@ namespace physics
         p = add(p, mul(v, h));
 
         const float radius_from_origin = len(p);
-        if (radius_from_origin + cfg.ball_radius > cfg.outer_limit_r)
+        if (radius_from_origin + cfg.ball_radius
+                > cfg.outer_limit_r)
         {
             s.mode = GameMode::GameOver;
             s.ball_launched = false;
@@ -306,7 +447,9 @@ namespace physics
             return;
         }
 
-        for (int iteration = 0; iteration < cfg.max_resolve_iters; ++iteration)
+        for (int iteration = 0;
+                iteration < cfg.max_resolve_iters;
+                ++iteration)
         {
             bool corrected_overlap = false;
 
@@ -315,9 +458,10 @@ namespace physics
 
             for (int i = 0; i < cfg.paddle_count; ++i)
             {
-                const float center = s.paddle_angle
+                const float center = paddle_angle
                     + static_cast<float>(i)
-                    * static_cast<float>(2.0 * M_PI / cfg.paddle_count);
+                    * static_cast<float>(
+                        2.0 * M_PI / cfg.paddle_count);
 
                 const Hit hit = collide_annular_sector(
                         p,
@@ -329,7 +473,8 @@ namespace physics
 
                 if (hit.hit
                         && (!best_paddle_hit.hit
-                            || hit.penetration > best_paddle_hit.penetration))
+                            || hit.penetration
+                                > best_paddle_hit.penetration))
                 {
                     best_paddle_hit = hit;
                 }
@@ -337,12 +482,14 @@ namespace physics
 
             if (best_paddle_hit.hit)
             {
-                const Vec2 contact_point = sub(
-                        p,
-                        mul(best_paddle_hit.normal, cfg.ball_radius));
-                const Vec2 paddle_velocity = mul(
-                        perp(contact_point),
+                Vec2 paddle_velocity = mul(
+                        perp(best_paddle_hit.closest_point),
                         s.paddle_omega);
+
+                paddle_velocity = limit_length(
+                        paddle_velocity,
+                        cfg.max_paddle_surface_speed_ratio
+                            * s.ball_speed);
 
                 const bool bounced = apply_collision_response(
                         v,
@@ -351,7 +498,21 @@ namespace physics
                         cfg.paddle_friction,
                         s.ball_speed);
 
-                separate_ball(p, best_paddle_hit, cfg.separation_epsilon);
+                if (bounced)
+                {
+                    enforce_relative_separation(
+                            v,
+                            best_paddle_hit.normal,
+                            paddle_velocity,
+                            s.ball_speed,
+                            cfg.min_relative_separation_speed_ratio);
+                }
+
+                separate_ball(
+                        p,
+                        best_paddle_hit,
+                        cfg.separation_epsilon);
+
                 corrected_overlap = true;
 
                 if (bounced)
@@ -359,8 +520,11 @@ namespace physics
             }
 
             // ----- Ball against the brick wall -----
-            const float ball_angle = wrap_0_2pi(std::atan2(p.y, p.x));
-            const int central_column = angle_to_col(ball_angle, cfg.brick_cols);
+            const float ball_angle =
+                wrap_0_2pi(std::atan2(p.y, p.x));
+
+            const int central_column =
+                angle_to_col(ball_angle, cfg.brick_cols);
 
             const int candidates[3] = {
                 wrap_col(central_column, cfg.brick_cols),
@@ -370,14 +534,18 @@ namespace physics
 
             Hit best_brick_hit;
             int best_column = -1;
+            int best_row = -1;
 
             for (const int column : candidates)
             {
-                const int row = bricks.lowest_alive_row_in_column(column);
+                const int row =
+                    bricks.bottom_collision_row_in_column(column);
+
                 if (row < 0)
                     continue;
 
                 const Brick& brick = bricks.at(column, row);
+
                 const Hit hit = collide_annular_sector(
                         p,
                         cfg.ball_radius,
@@ -388,10 +556,12 @@ namespace physics
 
                 if (hit.hit
                         && (!best_brick_hit.hit
-                            || hit.penetration > best_brick_hit.penetration))
+                            || hit.penetration
+                                > best_brick_hit.penetration))
                 {
                     best_brick_hit = hit;
                     best_column = column;
+                    best_row = row;
                 }
             }
 
@@ -404,24 +574,26 @@ namespace physics
                         0.0f,
                         s.ball_speed);
 
-                separate_ball(p, best_brick_hit, cfg.separation_epsilon);
+                separate_ball(
+                        p,
+                        best_brick_hit,
+                        cfg.separation_epsilon);
+
                 corrected_overlap = true;
 
-                if (bounced)
+                if (bounced
+                        && bricks.hit_and_collapse(
+                            best_column, best_row))
                 {
-                    const int row = bricks.lowest_alive_row_in_column(best_column);
-                    if (row >= 0 && bricks.hit_and_collapse(best_column, row))
-                    {
-                        ++s.hit_brick_count;
+                    ++s.hit_brick_count;
 
-                        if (bricks.alive_count() == 0)
-                        {
-                            s.mode = GameMode::Win;
-                            s.ball_launched = false;
-                            s.ball_vx = 0.0f;
-                            s.ball_vy = 0.0f;
-                            break;
-                        }
+                    if (bricks.alive_count() == 0)
+                    {
+                        s.mode = GameMode::Win;
+                        s.ball_launched = false;
+                        s.ball_vx = 0.0f;
+                        s.ball_vy = 0.0f;
+                        break;
                     }
                 }
             }
@@ -435,10 +607,14 @@ namespace physics
         s.ball_vx = v.x;
         s.ball_vy = v.y;
         s.ball_r = len(p);
-        s.ball_a = wrap_0_2pi(std::atan2(p.y, p.x));
+        s.ball_a =
+            wrap_0_2pi(std::atan2(p.y, p.x));
     }
 
-    void step(GameState& s, BrickField& bricks, const Config& cfg, float dt)
+    void step(GameState& s,
+            BrickField& bricks,
+            const Config& cfg,
+            float dt)
     {
         dt = clampf(dt, 0.0f, 0.05f);
 
@@ -457,13 +633,31 @@ namespace physics
 
         int substeps = 1;
         if (cfg.dt_substep > 1e-6f)
-            substeps = static_cast<int>(std::ceil(dt / cfg.dt_substep));
-        substeps = std::max(1, substeps);
+        {
+            substeps = static_cast<int>(
+                    std::ceil(dt / cfg.dt_substep));
+        }
 
+        substeps = std::max(1, substeps);
         const float h = dt / static_cast<float>(substeps);
+
+        const float paddle_angle_start = wrap_0_2pi(
+                s.paddle_angle - s.paddle_omega * dt);
+
         for (int i = 0; i < substeps; ++i)
         {
-            resolve_one_step(s, bricks, cfg, h);
+            const float substep_paddle_angle = wrap_0_2pi(
+                    paddle_angle_start
+                    + s.paddle_omega
+                        * h * static_cast<float>(i + 1));
+
+            resolve_one_step(
+                    s,
+                    bricks,
+                    cfg,
+                    h,
+                    substep_paddle_angle);
+
             if (s.mode != GameMode::Playing)
                 break;
         }

@@ -9,7 +9,7 @@ namespace physics
     {
         float ball_radius = 0.04f;
         float outer_limit_r = 2.45f;
-        float launch_angle = 0.30f;
+        float launch_angle = 0.10f;
 
         int paddle_count = 3;
         float paddle_r_inner = 2.00f;
@@ -22,13 +22,15 @@ namespace physics
         float brick_r_outer = 0.80f;
         float brick_half_span = 0.0f;
 
-        float paddle_friction = 0.50f;
+        float paddle_friction = 0.18f;
+        float max_paddle_surface_speed_ratio = 0.65f;
+        float min_relative_separation_speed_ratio = 0.05f;
 
         // Small positional correction after an overlap
         float separation_epsilon = 1e-4f;
 
         float dt_substep = 0.005f;
-        int max_resolve_iters = 3;
+        int max_resolve_iters = 4;
     };
 
     void sync_config_from_scene(Config& cfg,

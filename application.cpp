@@ -29,21 +29,22 @@ namespace
 {
     struct SceneScale
     {
-        float ground_r = 2.5f;
+        float ground_r = 2.0f;
         int ground_segments = 160;
         float ground_uv_tiling = 6.0f;
 
-        float paddle_r_inner = 2.00f;
-        float paddle_r_outer = 2.20f;
-        float paddle_half_span = 0.22f;
+        float paddle_r_inner = 1.65f;
+        float paddle_r_outer = 1.85f;
+        float paddle_half_span = 0.28f;
 
-        float brick_r_inner = 0.60f;
-        float brick_r_outer = 0.80f;
-        float brick_half_span = 0.10f;
+        float brick_r_inner = 0.45f;
+        float brick_r_outer = 0.65f;
+
+        float outer_limit_r = 1.8f;
 
         int bricks_per_ring = 16;
         float brick_z0 = 0.02f;
-        float brick_height = 0.10f;
+        float brick_height = 0.15f;
         float brick_row_gap_z = 0.00f;
 
         int brick_rows = 4;
@@ -53,8 +54,6 @@ namespace
 
         float axis_len = 3.0f;
         float axis_z = 0.002f;
-
-        float outer_limit_r = 2.45f;
     };
 
     static SceneScale S;
@@ -517,13 +516,10 @@ void Application::update(float delta)
 
     g_state.update(delta);
     physics::step(g_state, g_bricks, g_phys, delta);
-    g_bricks.update_fall(delta, 14.0f);
 
-    // if (g_state.hit_paddle_count != prev_paddle_hits)
-    // {
-    //     prev_paddle_hits = g_state.hit_paddle_count;
-    //     shake.trigger(0.02f, 0.08f);
-    // }
+    if (g_state.mode == GameMode::Playing) {
+        g_bricks.update_fall(delta);
+    }
 
     if (g_state.hit_brick_count != prev_brick_hits)
     {
@@ -548,7 +544,8 @@ void Application::render()
     view = shakeT * view;
 
     Vec4 camPos = camera.getFrame().position;
-    Vec4 lightDir = normalize3(Vec4(1.0f, 1.0f, 2.0f, 0.0f));
+    //glUniform1f(lit_u_ambient, 0.20f);
+    Vec4 lightDir = normalize3(Vec4(camPos.x + 1.0f, camPos.y + 3.0f, camPos.z + 1.0f, 0.0f));
 
     glUseProgram(g_texlit_prog);
 
@@ -558,9 +555,9 @@ void Application::render()
     glUniform3f(g_texlit_uLightDir, lightDir.x, lightDir.y, lightDir.z);
     glUniform3f(g_texlit_uCameraPos, camPos.x, camPos.y, camPos.z);
 
-    glUniform1f(g_texlit_uAmbient, 0.50f);
-    glUniform1f(g_texlit_uSpecular, 0.50f);
-    glUniform1f(g_texlit_uShininess, 48.0f);
+    glUniform1f(lit_u_ambient, 0.38f);
+    glUniform1f(lit_u_specular, 0.30f);
+    glUniform1f(lit_u_shininess, 32.0f);
 
     glUniform1i(g_texlit_uTex, 0);
     g_groundTex.bind(GL_TEXTURE0);
@@ -581,9 +578,9 @@ void Application::render()
     glUniform3f(lit_u_light_dir, lightDir.x, lightDir.y, lightDir.z);
     glUniform3f(lit_u_camera_pos, camPos.x, camPos.y, camPos.z);
 
-    glUniform1f(lit_u_ambient, 0.20f);
-    glUniform1f(lit_u_specular, 0.60f);
-    glUniform1f(lit_u_shininess, 48.0f);
+    glUniform1f(g_texlit_uAmbient, 0.35f);
+    glUniform1f(g_texlit_uSpecular, 0.20f);
+    glUniform1f(g_texlit_uShininess, 24.0f);
 
     {
         float x = g_state.ball_r * std::cos(g_state.ball_a);
@@ -621,7 +618,8 @@ void Application::render()
             setMat4(lit_u_model, model);
 
             // bool alt = ((b.col + b.row) & 1) != 0;
-            bool alt = ((b.col + b.row_target) & 1) != 0;
+            const bool alt = b.color_variant != 0;
+            //bool alt = ((b.col + b.row_target) & 1) != 0;
             if (alt) brick_mesh_b.draw();
             else     brick_mesh_a.draw();
         }

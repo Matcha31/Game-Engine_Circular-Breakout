@@ -29,7 +29,7 @@ struct GameState
 
     // Slower than the previous 1.0f so the collision behaviour can be tested
     // and the level is realistically winnable.
-    float ball_speed = 0.45f;
+    float ball_speed = 0.5f;
     bool ball_launched = false;
 
     float ball_radial_speed = 0.0f;
