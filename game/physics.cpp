@@ -436,9 +436,8 @@ namespace physics
 
         p = add(p, mul(v, h));
 
-        const float radius_from_origin = len(p);
-        if (radius_from_origin + cfg.ball_radius
-                > cfg.outer_limit_r)
+        const float final_radius = len(p);
+        if (final_radius - cfg.ball_radius > cfg.outer_limit_r)
         {
             s.mode = GameMode::GameOver;
             s.ball_launched = false;
@@ -498,15 +497,15 @@ namespace physics
                         cfg.paddle_friction,
                         s.ball_speed);
 
-                if (bounced)
-                {
-                    enforce_relative_separation(
-                            v,
-                            best_paddle_hit.normal,
-                            paddle_velocity,
-                            s.ball_speed,
-                            cfg.min_relative_separation_speed_ratio);
-                }
+                //if (bounced)
+                //{
+                //    enforce_relative_separation(
+                //            v,
+                //            best_paddle_hit.normal,
+                //            paddle_velocity,
+                //            s.ball_speed,
+                //            cfg.min_relative_separation_speed_ratio);
+                //}
 
                 separate_ball(
                         p,

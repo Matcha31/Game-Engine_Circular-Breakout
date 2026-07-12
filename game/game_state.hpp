@@ -34,7 +34,7 @@ struct GameState
 
     float ball_radial_speed = 0.0f;
     float ball_angular_speed = 0.0f;
-    float outer_limit_r = 2.2f;
+    float outer_limit_r = 2.0f;
 
     int hit_paddle_count = 0;
     int hit_brick_count = 0;

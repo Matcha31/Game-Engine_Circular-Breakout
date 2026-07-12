@@ -545,7 +545,7 @@ void Application::render()
 
     Vec4 camPos = camera.getFrame().position;
     //glUniform1f(lit_u_ambient, 0.20f);
-    Vec4 lightDir = normalize3(Vec4(camPos.x + 1.0f, camPos.y + 3.0f, camPos.z + 1.0f, 0.0f));
+    Vec4 lightDir = normalize3(Vec4(camPos.x - 5.0f, camPos.y + 15.0f, camPos.z + 12.0f, 0.0f));
 
     glUseProgram(g_texlit_prog);
 

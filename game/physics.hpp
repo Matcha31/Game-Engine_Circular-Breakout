@@ -8,13 +8,13 @@ namespace physics
     struct Config
     {
         float ball_radius = 0.04f;
-        float outer_limit_r = 2.45f;
+        float outer_limit_r = 2.0f;
         float launch_angle = 0.10f;
 
         int paddle_count = 3;
         float paddle_r_inner = 2.00f;
         float paddle_r_outer = 2.20f;
-        float paddle_half_span = 0.22f;
+        float paddle_half_span = 0.5f;
 
         int brick_cols = 28;
         int brick_rows = 4;
@@ -22,8 +22,8 @@ namespace physics
         float brick_r_outer = 0.80f;
         float brick_half_span = 0.0f;
 
-        float paddle_friction = 0.18f;
-        float max_paddle_surface_speed_ratio = 0.65f;
+        float paddle_friction = 0.12f;
+        float max_paddle_surface_speed_ratio = 0.35f;
         float min_relative_separation_speed_ratio = 0.05f;
 
         // Small positional correction after an overlap
